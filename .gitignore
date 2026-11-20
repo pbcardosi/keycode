@@ -30,7 +30,7 @@ secrets/
 credentials.json
 
 # Extracted artifacts and scratch data
-artifacts/
+/artifacts/
 extracted/
 claude-js/
 claude.exe
