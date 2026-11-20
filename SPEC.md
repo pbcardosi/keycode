@@ -954,6 +954,35 @@ Part 3                       v
 Each track owns its acceptance tests and can merge independently once the
 contracts in Part 1 are stable.
 
+### 12.3 Weekly milestones
+
+Weeks are planning targets. The exit gates are the commitment; a week may slip
+without changing scope.
+
+| Week | Focus | Features completed | Gate |
+|---:|---|---|---|
+| 1 | Foundation, contracts, registry, OpenAI-compatible adapter, free and local presets | P1, P3, P4, P5 | `keycode --version` runs; presets resolve offline |
+| 2 | Turn loop, sessions, headless mode, credentials, retries, budgets, model selection | C1-C4, C10, P2, P6-P9 | One streamed turn works with Gemini and Ollama |
+| 3 | Core tools and the permission pipeline | T1-T7, T10, T12, S1-S4, S7, S8 | Edits and commands are permission-checked |
+| 4 | Compaction, usage, checkpoints, memory basics, settings, TUI, Part 1 gate | C5-C9, M1, M2, M4-M6, O1, U1, U2, U5 | 43 tests; demo fixes a failing test on a free provider |
+| 5 | Web, search, notebooks, MCP, LSP | T8, T9, T11, T16, T17 | MCP server exposes tools; WebFetch blocks SSRF |
+| 6 | Skills, subagents, background tasks, Code Mode, artifacts | T13-T15, T18, T19 | A restricted subagent cannot escalate |
+| 7 | Commands, skills, agents, teams, hooks, plugins, styles, keys, workflows, loops, memory, context budgeting | X1-X12, M3, M7 | A local plugin adds a command, skill, hook, and MCP server |
+| 8 | Sandbox, restricted modes, audit, managed policy, privacy, OTel, accessibility, onboarding, doctor, Part 2 gate | S5, S6, S9, O2-O4, U4, U6, U7 | 76 tests; sandbox escape tests pass |
+| 9 | SDK, structured output, GitHub Actions, PR workflows, import | I1, I2, I9, I10 | A PR review runs headless with a free key |
+| 10 | IDE bridge, browser automation, worktrees, background sessions | I3, I4, I7, I8 | Background session survives a crash |
+| 11 | Remote Control, self-hosted runner, gateway | I5, I6, O5 | Phone browser controls a local session |
+| 12 | Notifications, updates, cross-platform certification, release | U3, U8, O6 | 90 tests; signed release candidate |
+
+Milestone rules:
+
+- A week is done when its features' `T-<ID>` tests pass, not when code is
+  merged.
+- A feature that slips moves to the next week; it does not move to another part
+  without a spec change.
+- The Part 1 contracts are frozen at the end of week 2. Later parts extend them
+  only through additive changes.
+
 ---
 
 ## 13. Traceability
