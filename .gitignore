@@ -57,3 +57,8 @@ npm-debug.log*
 # Local release staging
 /release/
 
+
+# Prototype capture artifacts
+prototype/**/.hallmark/
+prototype/**/preview-*.png
+
