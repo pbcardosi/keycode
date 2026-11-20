@@ -97,6 +97,44 @@ If you run from source instead, replace `keycode` with
 
 ---
 
+## Model guidance
+
+Native tool calling produces the most reliable results. Free and local options:
+
+| Provider | Recommended | Notes |
+|---|---|---|
+| Ollama | `qwen3-coder`, `llama3.1` | Best local tool use. `gemma4:e2b` is the smallest default; it can stop early or repeat work. |
+| LM Studio / llama.cpp | Qwen3-Coder, Devstral | Pick a model whose template supports tools. |
+| Gemini | `gemini-2.5-flash` | Large context, strong tool use. |
+| Groq | `llama-3.3-70b-versatile`, `openai/gpt-oss-120b` | Fast; no vision. |
+| OpenRouter | `qwen/qwen3-coder:free` | Free tier rates vary. |
+| Cerebras | `qwen-3-32b` | Fast; no vision. |
+| Mistral | `mistral-small-latest`, `codestral-latest` | |
+| GitHub Models | `openai/gpt-4o-mini`, `openai/gpt-4.1` | |
+
+The agent protects against common small-model failures:
+
+- **Repeated calls:** three consecutive identical tool calls are blocked with
+  `REPEATED_TOOL_CALL` so the model must verify or finish.
+- **Already-applied edits:** `Edit` returns a successful no-op instead of
+  failing and provoking a retry loop.
+- **No native tools:** when a model declares `tools: false`, keycode appends a
+  documented text protocol to the prompt and parses this fenced block:
+
+  ````text
+  ```keycode-tool
+  {"name":"Read","input":{"file_path":"src/index.ts"}}
+  ```
+  ````
+
+  Native tool calls are always preferred; the text protocol is a fallback and
+  still goes through the permission pipeline.
+
+If a model claims work is done without calling tools, ask it to verify with a
+tool, or switch to a tool-capable model.
+
+---
+
 ## Release
 
 Tag a commit with `v<version>` and push the tag. The release workflow reruns

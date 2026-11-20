@@ -30,6 +30,9 @@ First alpha.
   accessibility mode, onboarding, doctor, and update checks.
 - Packaging: `keycode` bin, `npm pack` tarball smoke test, package validation,
   and a cross-platform CI matrix.
+- Text tool-call protocol for models without native tool support, and a guard
+  that blocks three consecutive identical tool calls.
+- Model guidance for free and local providers in the README.
 
 ### Known limitations
 

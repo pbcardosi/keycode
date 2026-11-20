@@ -638,6 +638,11 @@ maximize prompt-cache reuse.
 - Read-only tools run in parallel up to 8; mutating tools run exclusively.
 - A turn may issue at most 20 tool calls by default; excess calls return an
   error result.
+- Three consecutive identical tool calls are not executed after the second;
+  the third returns `REPEATED_TOOL_CALL` so the model must verify or finish.
+- Models declaring `tools: false` receive a documented fenced `keycode-tool`
+  protocol in the system prompt. Parsed calls use the same validation,
+  permission pipeline, and repeat guard as native tool calls.
 - Output is capped at 30,000 characters; larger output is written to
   `KEYCODE_HOME/tool-output/<id>.txt` and the result contains a path plus a
   preview.

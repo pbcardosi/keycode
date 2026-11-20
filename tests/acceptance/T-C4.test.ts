@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createAgentSetup } from "../../dist/app/factory.js";
 import { AgentEvent } from "../../dist/app/agent.js";
@@ -66,5 +68,37 @@ describe("T-C4: Streaming turn loop", () => {
     const view = setup.store.load(setup.sessionId);
     expect(view.messages.some((message) => message.role === "assistant" && message.interrupted === true)).toBe(true);
     expect(JSON.stringify(view.messages)).not.toContain("second");
+  });
+
+  it("stops a model that repeats the same tool call three times", async () => {
+    const home = makeHome();
+    const ws = makeWorkspace();
+    const call = (id: string) => [
+      { type: "tool_call", id, name: "Bash", input: { command: "echo x >> runs.txt" } },
+      { type: "done", stopReason: "tool_use" },
+    ];
+    const script = {
+      turns: [
+        call("t1"),
+        call("t2"),
+        call("t3"),
+        [{ type: "text", delta: "stopped" }, { type: "done", stopReason: "end_turn" }],
+      ],
+    };
+    const setup = await createAgentSetup({
+      cwd: ws,
+      home,
+      provider: "fake",
+      trust: true,
+      permissionMode: "bypassPermissions",
+      env: FAKE_ENV(home, script),
+    });
+    const result = await setup.agent.runTurn("loop", new AbortController().signal);
+
+    expect(result.stopReason).toBe("end_turn");
+    expect(result.text).toContain("stopped");
+    const runs = readFileSync(join(ws, "runs.txt"), "utf8").trim().split(/\r?\n/);
+    expect(runs).toHaveLength(2);
+    expect(JSON.stringify(setup.store.load(setup.sessionId).messages)).toContain("REPEATED_TOOL_CALL");
   });
 });

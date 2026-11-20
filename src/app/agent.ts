@@ -28,6 +28,7 @@ import { unifiedDiff } from "../tools/edit.js";
 import { systemClock, type Clock } from "../util/clock.js";
 import { silentLogger, type Logger } from "../util/logger.js";
 import { toolSpecs } from "../tools/index.js";
+import { parseTextToolCalls, TEXT_TOOL_PROTOCOL } from "../providers/textProtocol.js";
 import { negotiateMessages, negotiateTools, ALL_CAPABILITIES } from "../providers/capabilities.js";
 import { effectiveMessages, compactSession, type CompactResult } from "./compact.js";
 import { promptHash } from "../core/context.js";
@@ -104,6 +105,20 @@ function resultText(result: ToolResult): string {
   return result.content
     .map((block) => (block.type === "text" ? block.text : `[${block.type}]`))
     .join("\n");
+}
+
+function stableInput(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "undefined";
+  if (Array.isArray(value)) return `[${value.map(stableInput).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableInput(record[key])}`)
+    .join(",")}}`;
+}
+
+function callSignature(call: { name: string; input: unknown }): string {
+  return `${call.name}:${stableInput(call.input)}`;
 }
 
 function schemaMessage(error: {
@@ -275,14 +290,17 @@ export class Agent {
 
   private async streamTurn(signal: AbortSignal): Promise<StreamedTurn> {
     const view = this.options.store.load(this.options.sessionId);
+    const capabilities = this.capabilities();
     const messages = negotiateMessages(
-      this.capabilities(),
+      capabilities,
       effectiveMessages(view),
     );
-    const tools = negotiateTools(this.capabilities(), toolSpecs(this.options.tools));
+    const tools = capabilities.tools ? negotiateTools(capabilities, toolSpecs(this.options.tools)) : [];
     const request: ModelRequest = {
       model: this.options.model,
-      system: this.systemPrompt,
+      system: capabilities.tools
+        ? this.systemPrompt
+        : `${this.systemPrompt}\n\n${TEXT_TOOL_PROTOCOL}`,
       messages,
       tools,
       ...(this.options.effort === undefined ? {} : { effort: this.options.effort }),
@@ -322,6 +340,15 @@ export class Agent {
       if (stopReason !== "aborted") stopReason = "aborted";
     }
 
+    if (this.capabilities().tools === false && toolCalls.length === 0) {
+      const parsed = parseTextToolCalls(text);
+      if (parsed.calls.length > 0) {
+        text = parsed.text;
+        toolCalls.push(...parsed.calls);
+        stopReason = "tool_use";
+      }
+    }
+
     return { text, toolCalls, usage, stopReason, interrupted };
   }
 
@@ -359,11 +386,25 @@ export class Agent {
     };
   }
 
+  private repeatedCallResult(call: { id: string; name: string }): {
+    result: ToolResult;
+    message: ContentBlock;
+  } {
+    const text = `REPEATED_TOOL_CALL: ${call.name} with identical input already ran three times. Do not repeat it. Verify the current state with a different command or finish with a summary.`;
+    return {
+      result: {
+        ok: false,
+        content: [{ type: "text", text }],
+        metadata: { code: "REPEATED_TOOL_CALL" },
+      },
+      message: { type: "tool_result", toolCallId: call.id, ok: false, content: [{ type: "text", text }] },
+    };
+  }
+
   private async executeToolCall(
     call: { id: string; name: string; input: unknown },
     signal: AbortSignal,
-  ): Promise<{ result: ToolResult; message: ContentBlock }> {
-    const tool = this.options.tools.find((candidate) => candidate.name === call.name);
+  ): Promise<{ result: ToolResult; message: ContentBlock }> {    const tool = this.options.tools.find((candidate) => candidate.name === call.name);
     if (!tool) {
       const message = `Unknown tool "${call.name}". Available tools: ${this.options.tools.map((item) => item.name).join(", ")}.`;
       return {
@@ -517,6 +558,8 @@ export class Agent {
     let stopReason: StopReason = "end_turn";
     let interrupted = false;
     const maxToolCalls = this.options.maxToolCalls ?? 20;
+    let lastCallSignature: string | null = null;
+    let consecutiveRepeats = 0;
 
     try {
       for (let iteration = 0; iteration < maxToolCalls + 1; iteration += 1) {
@@ -561,7 +604,17 @@ export class Agent {
         for (const call of streamed.toolCalls) {
           totalToolCalls += 1;
           this.emit({ type: "tool_start", id: call.id, name: call.name, input: call.input });
-          const executed = await this.executeToolCall(call, signal);
+          const signature = callSignature(call);
+          if (signature === lastCallSignature) {
+            consecutiveRepeats += 1;
+          } else {
+            lastCallSignature = signature;
+            consecutiveRepeats = 1;
+          }
+          const executed =
+            consecutiveRepeats >= 3
+              ? this.repeatedCallResult(call)
+              : await this.executeToolCall(call, signal);
           toolResults.push(executed.message);
           this.options.store.appendToolResult(
             this.options.sessionId,
