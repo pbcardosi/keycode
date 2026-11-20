@@ -99,6 +99,33 @@ export function uuid(): string {
   return randomUUID();
 }
 
+export function writeFakeMcpServer(path: string): void {
+  const script = [
+    'let buffer = "";',
+    'process.stdin.on("data", (chunk) => {',
+    '  buffer += chunk.toString();',
+    '  let index;',
+    '  while ((index = buffer.indexOf("\\n")) !== -1) {',
+    '    const line = buffer.slice(0, index).trim();',
+    '    buffer = buffer.slice(index + 1);',
+    '    if (!line) continue;',
+    '    let msg;',
+    '    try { msg = JSON.parse(line); } catch { continue; }',
+    '    if (msg.id === undefined) continue;',
+    '    const respond = (result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, result }) + "\\n");',
+    '    if (msg.method === "initialize") respond({ protocolVersion: "2024-11-05", capabilities: { tools: {}, resources: {}, prompts: {} }, serverInfo: { name: "fake", version: "1" } });',
+    '    else if (msg.method === "tools/list") respond({ tools: [{ name: "echo", description: "Echo a value", inputSchema: { type: "object" } }] });',
+    '    else if (msg.method === "tools/call") respond({ content: [{ type: "text", text: JSON.stringify(msg.params.arguments) }] });',
+    '    else if (msg.method === "resources/list") respond({ resources: [{ uri: "file:///a.txt", name: "a" }] });',
+    '    else if (msg.method === "resources/read") respond({ contents: [{ uri: msg.params.uri, text: "hello resource" }] });',
+    '    else if (msg.method === "prompts/list") respond({ prompts: [{ name: "greet", description: "Greeting" }] });',
+    '    else if (msg.method === "prompts/get") respond({ messages: [{ role: "user", content: { type: "text", text: "hi prompt" } }] });',
+    '  }',
+    '});',
+  ].join("\n");
+  writeFileSync(path, script);
+}
+
 // Re-exports kept importable from one place.
 export { silentLogger } from "../dist/util/logger.js";
 export { systemClock } from "../dist/util/clock.js";
