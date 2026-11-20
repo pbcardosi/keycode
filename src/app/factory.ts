@@ -21,6 +21,8 @@ import { parseRule } from "../permissions/rules.js";
 import type { RuleScope } from "../contracts/permissions.js";
 import { CommandHookDispatcher, parseHookConfig, type HookConfig } from "../extensions/hooks.js";
 import { discoverCommands, type CommandDefinition } from "../extensions/commands.js";
+import { discoverSkills, type SkillMetadata } from "../extensions/skills.js";
+import { createSkillTool } from "../tools/skill.js";
 import { buildSystemPrompt, promptHash, type SystemPromptOptions } from "../core/context.js";
 import { createCoreTools, toolSpecs } from "../tools/index.js";
 import { BudgetGuard, type Pricing } from "../providers/budget.js";
@@ -78,6 +80,7 @@ export interface AgentSetup {
   checkpoints: CheckpointStore;
   toolNames: string[];
   commands: CommandDefinition[];
+  skills: SkillMetadata[];
 }
 
 function displayProviderAuthError(): KeycodeError {
@@ -224,9 +227,12 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   }
 
   const view = store.load(sessionId);
-  const tools = (options.tools ?? createCoreTools()).filter(
-    (tool) => !managedDeniedTools(home, env).includes(tool.name),
-  );
+  const skills = discoverSkills({ cwd, home, trusted });
+  const baseTools = options.tools ?? createCoreTools();
+  const tools = (baseTools.some((tool) => tool.name === "Skill")
+    ? baseTools
+    : [...baseTools, createSkillTool(skills)]
+  ).filter((tool) => !managedDeniedTools(home, env).includes(tool.name));
   const specs = toolSpecs(tools);
 
   const roots = [cwd, ...(options.addDirs ?? []).map((dir) => resolve(cwd, dir))];
@@ -333,6 +339,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     checkpoints,
     toolNames: tools.map((tool) => tool.name),
     commands,
+    skills,
   };
 }
 

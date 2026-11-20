@@ -322,6 +322,19 @@ export class Agent {
       };
     }
 
+    const allowedBySkill = this.toolState.metadata.get("skill.allowedTools");
+    if (
+      Array.isArray(allowedBySkill) &&
+      call.name !== "Skill" &&
+      !allowedBySkill.includes(call.name)
+    ) {
+      const message = `PERMISSION_DENIED: ${call.name} is not allowed by the active skill (allowed: ${allowedBySkill.join(", ")})`;
+      return {
+        result: { ok: false, content: [{ type: "text", text: message }], metadata: { code: "PERMISSION_DENIED" } },
+        message: { type: "tool_result", toolCallId: call.id, ok: false, content: [{ type: "text", text: message }] },
+      };
+    }
+
     const parsed = tool.input.safeParse(call.input);
     if (!parsed.success) {
       const message = `TOOL_INPUT_INVALID: ${schemaMessage(parsed.error)}`;
@@ -413,6 +426,7 @@ export class Agent {
 
   async runTurn(input: string, signal: AbortSignal): Promise<TurnResult> {
     this.turn += 1;
+    this.toolState.metadata.delete("skill.allowedTools");
     const promptHook = await this.options.hooks?.run("UserPromptSubmit", {
       session_id: this.options.sessionId,
       hook_event_name: "UserPromptSubmit",

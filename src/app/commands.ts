@@ -42,6 +42,7 @@ export const COMMAND_HELP: Array<[string, string]> = [
   ["/clear", "Start a new session"],
   ["/sessions", "List recent sessions"],
   ["/permissions", "Show permission mode and rules"],
+  ["/skills", "List available skills"],
   ["/memory", "Show loaded memory files"],
   ["/status", "Show provider, model, and session"],
   ["/exit", "Exit keycode"],
@@ -228,6 +229,13 @@ export async function executeCommand(line: string, ctx: CommandContext): Promise
       );
       return { handled: true };
     }
+    case "skills":
+      out(
+        setup.skills.length === 0
+          ? "No skills."
+          : setup.skills.map((skill) => `${skill.name}  ${skill.description}`).join("\n"),
+      );
+      return { handled: true };
     case "permissions":
       out(`mode: ${setup.permissionMode}`);
       return { handled: true };
