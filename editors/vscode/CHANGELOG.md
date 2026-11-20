@@ -9,3 +9,4 @@
   and open target.
 - Active file and selection forwarding to the keycode server, with
   `keycode.forwardSelection` to disable it.
+- `vscode://keycode.keycode-vscode/open` deep link to open the chat directly.

@@ -16,6 +16,7 @@ const commands = new Map();
 const editorText = "const answer = 42;\n";
 const editorPath = join(workspace, "sample.ts");
 let selectionHandler = null;
+let uriHandler = null;
 
 const mockVscode = {
   StatusBarAlignment: { Left: 1 },
@@ -49,6 +50,10 @@ const mockVscode = {
       return { dispose() {} };
     },
     onDidChangeActiveTextEditor: () => ({ dispose() {} }),
+    registerUriHandler: (handler) => {
+      uriHandler = handler;
+      return { dispose() {} };
+    },
     createOutputChannel: () => ({
       appendLine: (line) => logs.push(line),
       show() {},
@@ -93,6 +98,9 @@ const context = { subscriptions: [] };
 try {
   extension.activate(context);
   await commands.get("keycode.openChat")();
+  if (typeof uriHandler?.handleUri !== "function") {
+    throw new Error("the extension did not register a URI handler");
+  }
 
   const entry = opened.find(([id]) => id === "simpleBrowser.show");
   if (!entry) {

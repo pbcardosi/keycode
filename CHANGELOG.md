@@ -43,6 +43,7 @@ First alpha.
   a Simple Browser tab, with model, permission, and lifecycle settings.
 - VS Code editor context forwarding: active file and selection reach the web UI
   over the authenticated loopback endpoint and are prepended to prompts.
+- `vscode://keycode.keycode-vscode/open` deep link for the VS Code extension.
 
 ### Known limitations
 

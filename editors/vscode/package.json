@@ -13,6 +13,7 @@
   "keywords": ["agent", "coding", "ollama", "byok"],
   "main": "./extension.js",
   "activationEvents": [
+    "onUri",
     "onCommand:keycode.openChat",
     "onCommand:keycode.restartServer",
     "onCommand:keycode.stopServer",

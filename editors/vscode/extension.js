@@ -267,6 +267,11 @@ function activate(context) {
     status,
     { dispose: () => contextDisposable?.dispose() },
     ...(activeEditorListener ? [activeEditorListener] : []),
+    vscode.window.registerUriHandler({
+      handleUri(uri) {
+        if (uri.path === "/open" || uri.path === "") void openChat();
+      },
+    }),
     vscode.commands.registerCommand("keycode.openChat", openChat),
     vscode.commands.registerCommand("keycode.restartServer", async () => {
       stopServer();

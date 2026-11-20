@@ -14,6 +14,9 @@ const main = typeof pkg.main === "string" ? resolve(dir, pkg.main) : "";
 if (main.length > 0 && !existsSync(main)) failures.push(`main file not found: ${pkg.main}`);
 
 const commands = new Set((pkg.contributes?.commands ?? []).map((command) => command.command));
+if (!(pkg.activationEvents ?? []).includes("onUri")) {
+  failures.push("activationEvents must include onUri for the deep link");
+}
 for (const id of [
   "keycode.openChat",
   "keycode.restartServer",

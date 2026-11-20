@@ -50,3 +50,6 @@ npm-debug.log*
 
 # Package tarballs
 *.tgz
+
+# VS Code extension packages
+*.vsix

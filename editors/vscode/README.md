@@ -27,6 +27,12 @@ sessions, Markdown, and model switching are all available unchanged.
 4. The active file and selection are forwarded automatically. The web UI shows
    a context chip above the composer; **Detach** removes it.
 
+You can also open the chat from a shell with the registered deep link:
+
+```powershell
+Start-Process "vscode://keycode.keycode-vscode/open"
+```
+
 ## Editor context
 
 With `keycode.forwardSelection` enabled (the default), the extension sends:
