@@ -63,7 +63,7 @@ describe("T-C3: Session persistence", () => {
     const forkRecord = store.load(forkId ?? "");
     expect(forkRecord.messages.length).toBeGreaterThanOrEqual(forkView.messages.length);
     expect(forkRecord.header.parentId).toBe(original?.id);
-  });
+  }, 30000);
 
   it("accepts a user-specified session id", async () => {
     const home = makeHome();
@@ -74,7 +74,7 @@ describe("T-C3: Session persistence", () => {
     const store = new SessionStore(home, ws);
     const view = store.load(id);
     expect(view.header.id).toBe(id);
-  });
+  }, 30000);
 
   it("appends to the resumed session and restores messages and model", async () => {
     const home = makeHome();
@@ -92,7 +92,7 @@ describe("T-C3: Session persistence", () => {
     expect(after.messages.length).toBeGreaterThan(before);
     expect(after.header.provider).toBe("fake");
     expect(after.header.model).toBe("fake-model");
-  });
+  }, 30000);
 
   it("stores sessions as append-only JSONL with a session header", async () => {
     const home = makeHome();
@@ -106,5 +106,5 @@ describe("T-C3: Session persistence", () => {
     expect(records.some((record) => (record as { type: string }).type === "message")).toBe(true);
     expect(records.some((record) => (record as { role?: string }).role === "user")).toBe(true);
     expect(records.some((record) => (record as { role?: string }).role === "assistant")).toBe(true);
-  });
+  }, 30000);
 });

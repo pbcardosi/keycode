@@ -46,6 +46,11 @@ interface CliOptions {
   debug?: boolean;
   dangerouslySkipPermissions?: boolean;
   trust?: boolean;
+  restricted?: boolean;
+  safeMode?: boolean;
+  bare?: boolean;
+  allowedTool?: string[];
+  axScreenReader?: boolean;
 }
 
 function parseOutputFormat(value: string | undefined): OutputFormat {
@@ -103,6 +108,10 @@ function setupOptions(options: CliOptions): AgentSetupOptions {
     ...(options.memory === false ? { noMemory: true } : {}),
     ...(options.debug === true ? { debug: true } : {}),
     ...(options.trust === undefined ? {} : { trust: options.trust }),
+    ...(options.restricted === true ? { restricted: true } : {}),
+    ...(options.safeMode === true ? { safeMode: true } : {}),
+    ...(options.bare === true ? { bare: true } : {}),
+    ...(options.allowedTool === undefined ? {} : { allowedTools: options.allowedTool }),
   };
 }
 
@@ -145,8 +154,14 @@ program
   .option("--append-system-prompt <text>", "append to the system prompt")
   .option("--no-memory", "do not load CLAUDE.md files")
   .option("--trust", "trust this workspace")
+  .option("--restricted", "remove code-running tools and WebFetch unless named")
+  .option("--allowed-tool <names...>", "keep these tools in restricted mode")
+  .option("--safe-mode", "disable customizations")
+  .option("--bare", "skip hooks, LSP, plugin sync, and memory")
+  .option("--ax-screen-reader", "flat-text accessibility mode")
   .option("--debug", "print debug details")
   .action(async (promptArg: string | undefined, options: CliOptions) => {
+    if (options.axScreenReader === true) process.env.KEYCODE_AX = "1";
     const outputFormat = parseOutputFormat(options.outputFormat);
     const inputFormat = parseInputFormat(options.inputFormat);
     const printPrompt =

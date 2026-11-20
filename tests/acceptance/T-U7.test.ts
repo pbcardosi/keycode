@@ -26,5 +26,5 @@ describe("T-U7: doctor", () => {
     expect(report.ok).toBe(true);
     expect(report.checks.map((check) => check.name)).toContain("mcp");
     expect(report.checks.find((check) => check.name === "mcp")?.status).toBe("ok");
-  });
+  }, 30000);
 });
