@@ -7,6 +7,7 @@ import { contextGrid } from "../core/context.js";
 import { getPreset } from "../providers/presets.js";
 import { copyToClipboard } from "../util/clipboard.js";
 import { normalizeSlashes } from "../util/paths.js";
+import { findCommand, renderCommand } from "../extensions/commands.js";
 
 export interface CommandResult {
   handled: boolean;
@@ -64,9 +65,14 @@ export async function executeCommand(line: string, ctx: CommandContext): Promise
   const { setup, agent, out } = ctx;
 
   switch (name) {
-    case "help":
-      out(COMMAND_HELP.map(([command, description]) => `${command.padEnd(32)} ${description}`).join("\n"));
+    case "help": {
+      const lines = COMMAND_HELP.map(([command, description]) => `${command.padEnd(32)} ${description}`);
+      for (const command of setup.commands) {
+        lines.push(`${`/${command.name}`.padEnd(32)} ${command.description || "Custom command"}`);
+      }
+      out(lines.join("\n"));
       return { handled: true };
+    }
     case "model": {
       if (args.length === 0) {
         out(`model: ${agent.model} (provider: ${agent.providerId})`);
@@ -242,8 +248,18 @@ export async function executeCommand(line: string, ctx: CommandContext): Promise
     case "exit":
     case "quit":
       return { handled: true, exit: true };
-    default:
+    default: {
+      const custom = findCommand(setup.commands, name);
+      if (custom) {
+        const prompt = renderCommand(custom, args);
+        if (prompt.trim().length > 0) {
+          out(`Running command /${custom.name}`);
+          await agent.runTurn(prompt, ctx.signal);
+        }
+        return { handled: true };
+      }
       out(`Unknown command: /${name}. Run /help.`);
       return { handled: true };
+    }
   }
 }
