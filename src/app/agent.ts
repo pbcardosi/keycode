@@ -26,6 +26,7 @@ import { toolSpecs } from "../tools/index.js";
 import { negotiateMessages, negotiateTools, ALL_CAPABILITIES } from "../providers/capabilities.js";
 import { effectiveMessages, compactSession, type CompactResult } from "./compact.js";
 import { promptHash } from "../core/context.js";
+import type { HookDispatcher } from "../extensions/hooks.js";
 
 export type AgentEvent =
   | { type: "text"; delta: string }
@@ -61,6 +62,7 @@ export interface AgentOptions {
   checkpointStore?: CheckpointStore | undefined;
   askQuestions?: ((questions: Question[]) => Promise<QuestionResult>) | undefined;
   onEvent?: ((event: AgentEvent) => void) | undefined;
+  hooks?: HookDispatcher | undefined;
 }
 
 export interface TurnResult {
@@ -334,11 +336,38 @@ export class Agent {
       };
     }
 
+    let effectiveInput: unknown = parsed.data;
+    const preHook = await this.options.hooks?.run("PreToolUse", {
+      session_id: this.options.sessionId,
+      hook_event_name: "PreToolUse",
+      cwd: this.options.cwd,
+      tool_name: call.name,
+      tool_input: parsed.data,
+    });
+    if (preHook?.decision === "deny") {
+      const message = `PERMISSION_DENIED: ${preHook.reason ?? "Denied by hook"}`;
+      return {
+        result: { ok: false, content: [{ type: "text", text: message }], metadata: { code: "PERMISSION_DENIED" } },
+        message: { type: "tool_result", toolCallId: call.id, ok: false, content: [{ type: "text", text: message }] },
+      };
+    }
+    if (preHook?.updatedInput !== undefined) {
+      const reparsed = tool.input.safeParse(preHook.updatedInput);
+      if (!reparsed.success) {
+        const message = `TOOL_INPUT_INVALID: ${schemaMessage(reparsed.error)}`;
+        return {
+          result: { ok: false, content: [{ type: "text", text: message }] },
+          message: { type: "tool_result", toolCallId: call.id, ok: false, content: [{ type: "text", text: message }] },
+        };
+      }
+      effectiveInput = reparsed.data;
+    }
+
     let result: ToolResult;
     try {
       const decision = await this.options.permissions.check({
         tool: call.name,
-        input: call.input,
+        input: effectiveInput,
         cwd: this.options.cwd,
         readOnly: tool.readOnly,
       });
@@ -349,7 +378,7 @@ export class Agent {
           metadata: { code: "PERMISSION_DENIED", rule: decision.rule ?? null },
         };
       } else {
-        result = await tool.execute(parsed.data, this.toolContext(signal));
+        result = await tool.execute(effectiveInput, this.toolContext(signal));
       }
     } catch (error) {
       const keycode = isKeycodeError(error)
@@ -361,6 +390,15 @@ export class Agent {
         metadata: { code: keycode.code },
       };
     }
+
+    await this.options.hooks?.run(result.ok ? "PostToolUse" : "PostToolUseFailure", {
+      session_id: this.options.sessionId,
+      hook_event_name: result.ok ? "PostToolUse" : "PostToolUseFailure",
+      cwd: this.options.cwd,
+      tool_name: call.name,
+      tool_input: effectiveInput,
+      tool_result: { ok: result.ok, content: result.content },
+    });
 
     return {
       result,
@@ -375,6 +413,15 @@ export class Agent {
 
   async runTurn(input: string, signal: AbortSignal): Promise<TurnResult> {
     this.turn += 1;
+    const promptHook = await this.options.hooks?.run("UserPromptSubmit", {
+      session_id: this.options.sessionId,
+      hook_event_name: "UserPromptSubmit",
+      cwd: this.options.cwd,
+      prompt: input,
+    });
+    if (promptHook?.decision === "deny") {
+      throw new KeycodeError("PERMISSION_DENIED", promptHook.reason ?? "Prompt blocked by hook");
+    }
     const viewBefore = this.options.store.load(this.options.sessionId);
     this.options.checkpointStore?.create(
       this.options.sessionId,
@@ -495,6 +542,12 @@ export class Agent {
       throw error;
     }
 
+    await this.options.hooks?.run("Stop", {
+      session_id: this.options.sessionId,
+      hook_event_name: "Stop",
+      cwd: this.options.cwd,
+      stop_reason: stopReason,
+    });
     this.emit({ type: "done", stopReason });
     return {
       text: allText,
@@ -540,6 +593,12 @@ export class Agent {
   }
 
   async compact(instructions?: string, signal?: AbortSignal): Promise<CompactResult> {
+    await this.options.hooks?.run("PreCompact", {
+      session_id: this.options.sessionId,
+      hook_event_name: "PreCompact",
+      cwd: this.options.cwd,
+      instructions: instructions ?? null,
+    });
     const controller = new AbortController();
     const result = await compactSession({
       store: this.options.store,
@@ -557,6 +616,14 @@ export class Agent {
         promptHash(this.systemPrompt),
       );
     }
+    await this.options.hooks?.run("PostCompact", {
+      session_id: this.options.sessionId,
+      hook_event_name: "PostCompact",
+      cwd: this.options.cwd,
+      compacted: result.compacted,
+      tokens_before: result.tokensBefore,
+      tokens_after: result.tokensAfter,
+    });
     return result;
   }
 

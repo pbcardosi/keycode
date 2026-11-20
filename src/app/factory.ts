@@ -19,6 +19,7 @@ import {
 import { loadMemory } from "../storage/memory.js";
 import { parseRule } from "../permissions/rules.js";
 import type { RuleScope } from "../contracts/permissions.js";
+import { CommandHookDispatcher, parseHookConfig, type HookConfig } from "../extensions/hooks.js";
 import { buildSystemPrompt, promptHash, type SystemPromptOptions } from "../core/context.js";
 import { createCoreTools, toolSpecs } from "../tools/index.js";
 import { BudgetGuard, type Pricing } from "../providers/budget.js";
@@ -59,6 +60,7 @@ export interface AgentSetupOptions {
   tools?: ReturnType<typeof createCoreTools> | undefined;
   trust?: boolean | undefined;
   autoCompactThreshold?: number | undefined;
+  hooks?: HookConfig | undefined;
 }
 
 export interface AgentSetup {
@@ -267,6 +269,11 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   });
 
   const checkpoints = new CheckpointStore(home, cwd, store);
+  const hookConfig = options.hooks ?? (trusted ? parseHookConfig(settings.hooks) : {});
+  const hooks =
+    Object.keys(hookConfig).length > 0
+      ? new CommandHookDispatcher(hookConfig, { cwd, home, env })
+      : undefined;
   const autoCompactThreshold = options.autoCompactThreshold ?? settings.autoCompactThreshold;
   const maxBudget = options.maxBudgetUsd ?? settings.maxBudgetUsd;
   const budget = maxBudget === undefined ? undefined : new BudgetGuard(maxBudget, options.pricing);
@@ -299,7 +306,14 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     checkpointStore: checkpoints,
     ...(options.askQuestions === undefined ? {} : { askQuestions: options.askQuestions }),
     ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }),
+    ...(hooks === undefined ? {} : { hooks }),
     logger,
+  });
+
+  await hooks?.run("SessionStart", {
+    session_id: sessionId,
+    hook_event_name: "SessionStart",
+    cwd,
   });
 
   return {
