@@ -294,8 +294,20 @@ function sendPrompt() {
   socket.send(JSON.stringify({ type: "prompt", prompt }));
 }
 
+function normalizeToken(value) {
+  const trimmed = value.trim();
+  const hashIndex = trimmed.indexOf("#");
+  if (hashIndex !== -1) {
+    const params = new URLSearchParams(trimmed.slice(hashIndex + 1));
+    const fromUrl = params.get("token");
+    if (fromUrl) return fromUrl;
+  }
+  if (trimmed.startsWith("token=")) return trimmed.slice("token=".length);
+  return trimmed;
+}
+
 function submitToken() {
-  const value = tokenInput.value.trim();
+  const value = normalizeToken(tokenInput.value);
   if (value.length === 0) return;
   token = value;
   history.replaceState(null, "", `#token=${encodeURIComponent(value)}`);

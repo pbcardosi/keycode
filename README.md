@@ -153,6 +153,9 @@ keycode remote --provider ollama
 # Remote Control: http://127.0.0.1:<port>/#token=...
 ```
 
+Add `--open` to launch the default browser automatically. If the pairing dialog
+appears, paste either the token or the full printed URL.
+
 Open the printed URL. The interface supports:
 
 - streamed replies and tool rows,
@@ -162,9 +165,10 @@ Open the printed URL. The interface supports:
 - pairing by token, with the server bound to loopback only.
 
 Static assets are public, but every conversation action and the WebSocket
-require the token. The page reads it from the URL fragment, so it is not sent in
-HTTP requests or logs. `--permission-mode` defaults to `manual`, since approvals
-happen in the browser.
+require the token. The page reads it from the URL fragment, so it is not sent
+with static file requests or written to logs; the WebSocket handshake sends it
+once as a query parameter. `--permission-mode` defaults to `manual`, since
+approvals happen in the browser.
 
 If the token is lost, stop the server and run the command again; a new token is
 generated. Pass `--token <value>` to reuse one on a trusted loopback setup.

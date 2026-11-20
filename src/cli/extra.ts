@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -112,6 +113,19 @@ function keepAlive(close: () => Promise<void>): void {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+}
+
+function openBrowser(url: string): void {
+  const command = process.platform === "win32" ? "cmd" : process.platform === "darwin" ? "open" : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+  try {
+    const child = spawn(command, args, { detached: true, stdio: "ignore", windowsHide: true });
+    // Browser launch is best effort; the URL is always printed as well.
+    child.on("error", () => undefined);
+    child.unref();
+  } catch {
+    // Ignore a missing launcher and keep the server running.
+  }
 }
 
 export function registerExtraCommands(program: Command): void {
@@ -383,6 +397,7 @@ export function registerExtraCommands(program: Command): void {
     .command("remote")
     .description("Start Remote Control on loopback with a pairing token")
     .option("--token <token>", "pairing token")
+    .option("--open", "open the web UI in the default browser")
     .option("--provider <id>", "provider id")
     .option("--model <id>", "model id")
     .option("--permission-mode <mode>", "permission mode", "manual")
@@ -456,6 +471,7 @@ export function registerExtraCommands(program: Command): void {
       });
       stdout.write(`Remote Control: ${server.url}/#token=${server.token}\n`);
       stdout.write(`Token: ${server.token}\nSession: ${setup.sessionId}\n`);
+      if (options.open === true) openBrowser(`${server.url}/#token=${server.token}`);
       keepAlive(async () => {
         broker.cancelAll();
         await server.close();
