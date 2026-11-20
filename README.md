@@ -38,8 +38,8 @@ keycode --provider gemini --model gemini-2.5-flash
 
 # Option B: a local model, no key
 ollama serve
-ollama pull gemma4:12b
-keycode --provider ollama --model gemma4:12b
+ollama pull gemma4:e2b
+keycode --provider ollama --model gemma4:e2b
 ```
 
 Then, inside the TUI:

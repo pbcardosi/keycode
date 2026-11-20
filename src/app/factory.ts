@@ -112,7 +112,7 @@ function displayProviderAuthError(): KeycodeError {
       "Free options:",
       "  - Gemini: set GEMINI_API_KEY (https://aistudio.google.com/apikey)",
       "  - Groq: set GROQ_API_KEY (https://console.groq.com/keys)",
-      "  - Ollama: install from https://ollama.com and run `ollama pull gemma4:12b`",
+      "  - Ollama: install from https://ollama.com and run `ollama pull gemma4:e2b`",
       "Then run `keycode --provider gemini` or `keycode --provider ollama`.",
     ].join("\n"),
   );
