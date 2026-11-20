@@ -1,7 +1,9 @@
 "use strict";
 
 function sanitize(line) {
-  return String(line).replace(/token=[^\s&]+/gi, "token=…");
+  return String(line)
+    .replace(/token=[^\s&]+/gi, "token=…")
+    .replace(/\btoken:\s*\S+/gi, "token: …");
 }
 
 function launch(executable, args, platform = process.platform, comspec = process.env.ComSpec) {

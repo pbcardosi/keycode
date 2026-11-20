@@ -1,12 +1,16 @@
 const vscode = require("vscode");
 const { spawn, spawnSync } = require("node:child_process");
 const { homedir } = require("node:os");
+const http = require("node:http");
 const { launch, parseRemoteUrl, sanitize } = require("./lib.js");
 
 let output = null;
 let status = null;
 let server = null;
 let starting = null;
+let contextTimer = null;
+let lastContext = null;
+let contextDisposable = null;
 
 function setStatus(state) {
   if (!status) return;
@@ -24,6 +28,79 @@ function setStatus(state) {
 
 function log(line) {
   if (output) output.appendLine(sanitize(line));
+}
+
+function postContext(payload) {
+  if (!server) return Promise.resolve();
+  const parsed = new URL(server.url);
+  const token = new URLSearchParams(parsed.hash.replace(/^#/, "")).get("token") ?? "";
+  const body = JSON.stringify(payload);
+  return new Promise((resolve) => {
+    const request = http.request(
+      {
+        hostname: "127.0.0.1",
+        port: parsed.port,
+        path: `/context?token=${encodeURIComponent(token)}`,
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(body),
+        },
+      },
+      (response) => {
+        response.resume();
+        response.on("end", resolve);
+      },
+    );
+    request.on("error", (error) => {
+      log(`context update failed: ${error.message}`);
+      resolve();
+    });
+    request.end(body);
+  });
+}
+
+function currentSelection() {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.uri.scheme !== "file") return null;
+  const selection = editor.selection;
+  const selected = editor.document.getText(selection);
+  return {
+    file: editor.document.uri.fsPath,
+    text: selected,
+    ...(selected.length > 0
+      ? { startLine: selection.start.line + 1, endLine: selection.end.line + 1 }
+      : {}),
+  };
+}
+
+async function forwardSelection(force = false) {
+  const config = vscode.workspace.getConfiguration("keycode");
+  if (config.get("forwardSelection") === false) {
+    if (lastContext !== null || force) await postContext(null);
+    lastContext = null;
+    return;
+  }
+  const payload = currentSelection();
+  const key = JSON.stringify(payload);
+  if (!force && key === lastContext) return;
+  lastContext = key;
+  if (payload === null) {
+    log("context: none");
+  } else {
+    const lines =
+      payload.startLine === undefined ? "active file" : `lines ${payload.startLine}-${payload.endLine}`;
+    log(`context: ${payload.file} (${lines})`);
+  }
+  await postContext(payload);
+}
+
+function scheduleContext() {
+  if (contextTimer !== null) clearTimeout(contextTimer);
+  contextTimer = setTimeout(() => {
+    contextTimer = null;
+    void forwardSelection();
+  }, 120);
 }
 
 function killTree(child) {
@@ -144,14 +221,17 @@ function stopServer() {
     return;
   }
   log("stopping keycode");
+  void postContext(null);
   killTree(server.child);
   server = null;
+  lastContext = null;
   setStatus("stopped");
 }
 
 async function openChat() {
   try {
     const current = await startServer();
+    await forwardSelection(true);
     const config = vscode.workspace.getConfiguration("keycode");
     const openIn = String(config.get("openIn") || "editor");
     if (openIn === "external") {
@@ -177,9 +257,16 @@ function activate(context) {
   setStatus("stopped");
   status.show();
 
+  if (vscode.window.onDidChangeTextEditorSelection) {
+    contextDisposable = vscode.window.onDidChangeTextEditorSelection(() => scheduleContext());
+  }
+  const activeEditorListener = vscode.window.onDidChangeActiveTextEditor?.(() => scheduleContext());
+
   context.subscriptions.push(
     output,
     status,
+    { dispose: () => contextDisposable?.dispose() },
+    ...(activeEditorListener ? [activeEditorListener] : []),
     vscode.commands.registerCommand("keycode.openChat", openChat),
     vscode.commands.registerCommand("keycode.restartServer", async () => {
       stopServer();

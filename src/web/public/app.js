@@ -16,6 +16,8 @@ const permissionTool = $("permission-tool");
 const permissionReason = $("permission-reason");
 const permissionPreview = $("permission-preview");
 const permissionDiff = $("permission-diff");
+const contextBar = $("context-bar");
+const contextLabel = $("context-label");
 const sessionModal = $("session-modal");
 const sessionList = $("session-list");
 const sessionsButton = $("sessions-button");
@@ -151,6 +153,25 @@ function renderMeta(info) {
   currentSessionId = info.sessionId ?? currentSessionId;
   currentProvider = info.provider ?? currentProvider;
   currentModel = info.model ?? currentModel;
+}
+
+function renderContext(context) {
+  if (!context || typeof context.file !== "string" || context.file.length === 0) {
+    contextBar.hidden = true;
+    contextLabel.textContent = "";
+    return;
+  }
+  const base = context.file.split(/[\\/]/).pop() || context.file;
+  const lines =
+    typeof context.startLine === "number"
+      ? `:${context.startLine}-${typeof context.endLine === "number" ? context.endLine : context.startLine}`
+      : "";
+  contextBar.hidden = false;
+  contextLabel.textContent = `${base}${lines}`;
+  contextBar.title =
+    context.text && context.text.length > 0
+      ? `${context.file}${lines} · ${context.text.length} selected characters`
+      : `${context.file} · active file`;
 }
 
 function showPermission(permission) {
@@ -389,6 +410,7 @@ function handleMessage(message) {
       tokenModal.hidden = true;
       renderMeta(message.info);
       renderHistory(message.history ?? []);
+      renderContext(message.context ?? null);
       showPermission(message.permission ?? null);
       if (message.busy === true) startTurn();
       else setStatus("ready", "ready");
@@ -398,6 +420,9 @@ function handleMessage(message) {
       break;
     case "permission":
       showPermission(message.permission ?? null);
+      break;
+    case "context":
+      renderContext(message.context ?? null);
       break;
     case "sessions":
       sessions = Array.isArray(message.sessions) ? message.sessions : [];
@@ -577,6 +602,10 @@ modelForm.addEventListener("submit", (event) => {
 
 $("model-cancel").addEventListener("click", () => {
   modelModal.hidden = true;
+});
+
+$("context-clear").addEventListener("click", () => {
+  send({ type: "clear_context" });
 });
 
 sessionForm.addEventListener("submit", (event) => {

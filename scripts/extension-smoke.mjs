@@ -13,6 +13,9 @@ const home = join(workspace, "home");
 const logs = [];
 const opened = [];
 const commands = new Map();
+const editorText = "const answer = 42;\n";
+const editorPath = join(workspace, "sample.ts");
+let selectionHandler = null;
 
 const mockVscode = {
   StatusBarAlignment: { Left: 1 },
@@ -28,11 +31,24 @@ const mockVscode = {
           permissionMode: "manual",
           cwd: workspace,
           openIn: "editor",
+          forwardSelection: true,
         })[key],
     }),
     onDidChangeConfiguration: () => ({ dispose() {} }),
   },
   window: {
+    activeTextEditor: {
+      document: {
+        uri: { scheme: "file", fsPath: editorPath },
+        getText: () => editorText,
+      },
+      selection: { start: { line: 1 }, end: { line: 1 } },
+    },
+    onDidChangeTextEditorSelection: (handler) => {
+      selectionHandler = handler;
+      return { dispose() {} };
+    },
+    onDidChangeActiveTextEditor: () => ({ dispose() {} }),
     createOutputChannel: () => ({
       appendLine: (line) => logs.push(line),
       show() {},
@@ -89,6 +105,23 @@ try {
   const token = new URL(url).hash.replace(/^#token=/, "");
   if (!logs.every((line) => !line.includes(token))) {
     throw new Error("the token leaked into the output channel");
+  }
+
+  const contextResponse = await fetch(`${new URL(url).origin}/context?token=${token}`);
+  if (!contextResponse.ok) throw new Error(`context request failed: ${contextResponse.status}`);
+  const { context: editorContext } = await contextResponse.json();
+  if (
+    editorContext === null ||
+    editorContext.file !== editorPath ||
+    editorContext.text !== editorText ||
+    editorContext.startLine !== 2 ||
+    editorContext.endLine !== 2
+  ) {
+    throw new Error(`selection was not forwarded: ${JSON.stringify(editorContext)}`);
+  }
+
+  if (typeof selectionHandler !== "function") {
+    throw new Error("the extension did not subscribe to selection changes");
   }
 
   const health = await fetch(`${new URL(url).origin}/health`);

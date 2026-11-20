@@ -7,3 +7,5 @@
 - Commands for open, restart, stop, external browser, and logs.
 - Settings for executable, provider, model, permission mode, working directory,
   and open target.
+- Active file and selection forwarding to the keycode server, with
+  `keycode.forwardSelection` to disable it.

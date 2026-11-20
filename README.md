@@ -164,6 +164,8 @@ Open the printed URL. The interface supports:
 - allow once / always / session / deny / cancel,
 - session list, new session, resume with history, rename, fork, and delete,
 - provider/model switching that keeps the current session,
+- editor context from the VS Code extension: active file and selection shown
+  above the composer and attached to prompts; **Detach** clears it,
 - stop and reconnect,
 - pairing by token, with the server bound to loopback only.
 

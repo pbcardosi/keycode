@@ -76,6 +76,11 @@
           "enum": ["editor", "external"],
           "default": "editor",
           "description": "Open the keycode web UI in a VS Code editor tab or the default browser."
+        },
+        "keycode.forwardSelection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send the active file and selected text to keycode as editor context."
         }
       }
     }

@@ -32,6 +32,7 @@ for (const key of [
   "keycode.permissionMode",
   "keycode.cwd",
   "keycode.openIn",
+  "keycode.forwardSelection",
 ]) {
   if (!(key in properties)) failures.push(`missing setting ${key}`);
 }

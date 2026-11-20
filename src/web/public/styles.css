@@ -357,6 +357,39 @@ body {
   background: var(--panel);
 }
 
+.context-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  font: 12px/1.4 var(--mono);
+  color: var(--muted);
+}
+
+.context-bar[hidden] {
+  display: none;
+}
+
+.context-icon {
+  color: var(--accent);
+}
+
+.context-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-bar .ghost {
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
 textarea {
   width: 100%;
   resize: none;

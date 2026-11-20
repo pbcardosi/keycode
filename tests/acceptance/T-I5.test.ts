@@ -292,4 +292,62 @@ describe("T-I5: Remote Control", () => {
     client.close();
     await server.close();
   });
+
+  it("forwards editor context and prepends it to prompts", async () => {
+    const prompts: string[] = [];
+    const server = await startRemoteControl({
+      token: "pair-token",
+      handler: {
+        onPrompt: async (prompt) => {
+          prompts.push(prompt);
+          return "ok";
+        },
+      },
+    });
+
+    const update = await fetch(`${server.url}/context?token=pair-token`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        file: "src/a.ts",
+        text: "const answer = 42;",
+        startLine: 4,
+        endLine: 4,
+      }),
+    });
+    expect(update.status).toBe(200);
+    const updated = (await update.json()) as { context: { file: string } };
+    expect(updated.context.file).toBe("src/a.ts");
+
+    const port = Number(new URL(server.url).port);
+    const client = await connectWebSocket(port, "/?token=pair-token");
+    const hello = (await nextOfType(client, "hello")) as {
+      context: { file: string; text: string; startLine: number } | null;
+    };
+    expect(hello.context).toMatchObject({
+      file: "src/a.ts",
+      text: "const answer = 42;",
+      startLine: 4,
+    });
+
+    client.send(JSON.stringify({ type: "prompt", prompt: "explain this" }));
+    await nextOfType(client, "turn_start");
+    await nextOfType(client, "turn_done");
+    expect(prompts[0]).toContain("# Editor context");
+    expect(prompts[0]).toContain("src/a.ts");
+    expect(prompts[0]).toContain("const answer = 42;");
+    expect(prompts[0]?.endsWith("explain this")).toBe(true);
+
+    const cleared = await fetch(`${server.url}/context?token=pair-token`, {
+      method: "DELETE",
+    });
+    expect(cleared.status).toBe(200);
+    client.send(JSON.stringify({ type: "prompt", prompt: "again" }));
+    await nextOfType(client, "turn_start");
+    await nextOfType(client, "turn_done");
+    expect(prompts[1]).toBe("again");
+
+    client.close();
+    await server.close();
+  });
 });
