@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, render, useApp, useStdin } from "ink";
 import type { AgentEvent } from "../app/agent.js";
-import type { Message } from "../contracts/message.js";
+import type { ContentBlock, Message } from "../contracts/message.js";
 import type { AgentSetup } from "../app/factory.js";
 import { executeCommand } from "../app/commands.js";
 import { renderMarkdown, renderToolRow, spinnerFrame, renderTodos, renderFooter } from "./format.js";
@@ -267,14 +267,44 @@ export function TuiApp({ setup, permissions, onClear }: TuiAppProps): React.Reac
         {messages.length === 0 && streamText.length === 0 && (
           <Text dimColor>keycode — type a prompt and press Enter.</Text>
         )}
-        {messages.map((message, index) => (
-          <Box key={message.id ?? String(index)} flexDirection="column" marginBottom={1}>
-            <Text color={message.role === "user" ? "cyan" : "green"}>
-              {message.role === "user" ? "You" : "keycode"}:
-            </Text>
-            <Text>{renderMarkdown(messageText(message))}</Text>
-          </Box>
-        ))}
+        {messages.map((message, index) => {
+          const text = messageText(message);
+          const toolCalls = message.content.filter(
+            (block): block is Extract<ContentBlock, { type: "tool_call" }> => block.type === "tool_call",
+          );
+          const toolResults = message.content.filter(
+            (block): block is Extract<ContentBlock, { type: "tool_result" }> => block.type === "tool_result",
+          );
+          if (text.length === 0 && toolCalls.length === 0 && toolResults.length === 0) return null;
+          return (
+            <Box key={message.id ?? String(index)} flexDirection="column" marginBottom={1}>
+              {text.length > 0 && (
+                <>
+                  <Text color={message.role === "user" ? "cyan" : "green"}>
+                    {message.role === "user" ? "You" : "keycode"}:
+                  </Text>
+                  <Text>{renderMarkdown(text)}</Text>
+                </>
+              )}
+              {toolCalls.map((call, callIndex) => {
+                const detail = toolDetail(call.input);
+                return (
+                  <Text key={`${call.id}-${callIndex}`} dimColor>
+                    {"  ⚙ "}
+                    {call.name}
+                    {detail.length > 0 ? ` · ${detail}` : ""}
+                  </Text>
+                );
+              })}
+              {toolResults.map((result, resultIndex) => (
+                <Text key={`${result.toolCallId}-${resultIndex}`} dimColor>
+                  {"  ↳ "}
+                  {result.ok ? "ok" : "error"}
+                </Text>
+              ))}
+            </Box>
+          );
+        })}
         {streamText.length > 0 && (
           <Box flexDirection="column" marginBottom={1}>
             <Text color="green">keycode:</Text>
