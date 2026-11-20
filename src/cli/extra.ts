@@ -1,0 +1,842 @@
+import { Command } from "commander";
+import { readFileSync } from "node:fs";
+import { extname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { stdout } from "node:process";
+import type { PermissionMode } from "../contracts/permissions.js";
+import type { ToolContext } from "../contracts/tool.js";
+import { createAgentSetup } from "../app/factory.js";
+import { keycodeHome, projectDir } from "../util/paths.js";
+import { silentLogger } from "../util/logger.js";
+import { systemClock } from "../util/clock.js";
+import { KeycodeError } from "../util/errors.js";
+import { runCommand } from "../tools/bash.js";
+import { createCodeModeTool } from "../tools/codemode.js";
+import { createBrowserTool, type BrowserDriver } from "../integrations/browser.js";
+import { BackgroundSessions } from "../integrations/background.js";
+import { IdeBridge } from "../integrations/ide.js";
+import { startRemoteControl } from "../integrations/remote.js";
+import { createWorktree, listWorktrees, removeWorktree } from "../integrations/worktrees.js";
+import {
+  buildPrComment,
+  getPullRequestDiff,
+  reviewDiff,
+  securityReview,
+} from "../integrations/pr.js";
+import { postIssueComment } from "../integrations/github.js";
+import { importConfigs } from "../integrations/import.js";
+import { checkForUpdate } from "../updates/index.js";
+import { startGateway } from "../gateway/index.js";
+import { ArtifactStore, startPreview } from "../artifacts/store.js";
+import { LspClient } from "../lsp/client.js";
+import { AutoMemoryStore } from "../storage/autoMemory.js";
+import { runWorkflow } from "../extensions/workflows.js";
+import { LoopManager } from "../extensions/loops.js";
+import { Notifier, webhookChannel, type NotificationChannel } from "../notifications/index.js";
+import { OtelExporter } from "../telemetry/otel.js";
+import {
+  addMcpServer,
+  listMcpServers,
+  oauthRefresh,
+  reconnectMcp,
+  removeMcpServer,
+  setMcpEnabled,
+  type McpScope,
+  type McpServerSettings,
+} from "../mcp/management.js";
+import {
+  installPlugin,
+  listPlugins,
+  pinPlugin,
+  removePlugin,
+  setPluginEnabled,
+} from "../extensions/plugins.js";
+
+function opts(cmd: Command): Record<string, unknown> {
+  const parent = cmd.parent;
+  return { ...(parent ? parent.opts() : {}), ...cmd.opts() };
+}
+
+function emit(value: unknown, json: unknown): void {
+  if (json === true) {
+    stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+  } else if (typeof value === "string") {
+    stdout.write(`${value}\n`);
+  } else {
+    stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+  }
+}
+
+function arrayOption(value: unknown, label: string): string[] | undefined {
+  if (typeof value !== "string" || value.trim().length === 0) return undefined;
+  const raw = value.trim();
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) return parsed.map((entry) => String(entry));
+  } catch {
+    // Fall through to the comma-separated form.
+  }
+  const inner = raw.replace(/^\[/, "").replace(/\]$/, "");
+  if (inner.trim().length === 0) return [];
+  const parts = inner
+    .split(",")
+    .map((entry) => entry.trim().replace(/^["']|["']$/g, ""))
+    .filter((entry) => entry.length > 0);
+  if (parts.length > 0) return parts;
+  throw new KeycodeError("CONFIG_INVALID", `${label} must be a JSON array or a comma-separated list`);
+}
+
+function scopeOption(value: unknown): McpScope {
+  return value === "project" || value === "local" ? value : "user";
+}
+
+function toolContext(home: string, cwd: string): ToolContext {
+  return {
+    sessionId: "cli",
+    cwd,
+    workspaceRoots: [cwd],
+    signal: new AbortController().signal,
+    permissions: { check: async () => ({ behavior: "allow" as const, reason: "CLI" }) },
+    logger: silentLogger,
+    clock: systemClock,
+    state: { readFiles: new Set<string>(), todos: [], metadata: new Map<string, unknown>() },
+    home,
+  };
+}
+
+function keepAlive(close: () => Promise<void>): void {
+  const shutdown = (): void => {
+    void close().finally(() => process.exit(0));
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+}
+
+export function registerExtraCommands(program: Command): void {
+  program
+    .command("mcp <action> [name]")
+    .description("Manage MCP servers: list, add, remove, enable, disable, reconnect, oauth")
+    .option("--command <command>", "stdio command")
+    .option("--args <json>", "stdio arguments as JSON")
+    .option("--url <url>", "HTTP or SSE URL")
+    .option("--scope <scope>", "user, project, or local", "user")
+    .option("--json", "emit JSON")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const [action, name] = cmd.args;
+      const home = keycodeHome();
+      const cwd = process.cwd();
+      if (action === "list") {
+        const servers = listMcpServers(home, cwd);
+        emit(
+          options.json === true
+            ? servers
+            : servers.length === 0
+              ? "No MCP servers."
+              : servers
+                  .map(
+                    (server) =>
+                      `${server.name}  ${server.scope}  ${server.enabled ? "enabled" : "disabled"}  ${server.config.type ?? (server.config.url ? "http" : "stdio")}`,
+                  )
+                  .join("\n"),
+          options.json,
+        );
+        return;
+      }
+      if (!name) throw new KeycodeError("CONFIG_INVALID", `mcp ${action} requires a server name`);
+      if (action === "add") {
+        const type = options.url !== undefined ? "http" : "stdio";
+        const argsList = arrayOption(options.args, "--args");
+        const config: McpServerSettings = {
+          type,
+          ...(typeof options.command === "string" ? { command: options.command } : {}),
+          ...(argsList === undefined ? {} : { args: argsList }),
+          ...(typeof options.url === "string" ? { url: options.url } : {}),
+        };
+        addMcpServer(home, cwd, name, config, scopeOption(options.scope));
+        emit(`Added MCP server ${name}.`, options.json);
+        return;
+      }
+      if (action === "remove") {
+        emit(removeMcpServer(home, cwd, name) ? `Removed ${name}.` : `Not found: ${name}`, options.json);
+        return;
+      }
+      if (action === "enable" || action === "disable") {
+        const ok = setMcpEnabled(home, cwd, name, action === "enable");
+        emit(ok ? `${action}d ${name}.` : `Not found: ${name}`, options.json);
+        return;
+      }
+      if (action === "reconnect") {
+        emit(await reconnectMcp(home, cwd, name), options.json);
+        return;
+      }
+      if (action === "oauth") {
+        emit(oauthRefresh(home, cwd, name) ? `Refreshed OAuth for ${name}.` : `Not found: ${name}`, options.json);
+        return;
+      }
+      throw new KeycodeError("CONFIG_INVALID", `Unknown mcp action: ${action}`);
+    });
+
+  program
+    .command("plugins <action> [target]")
+    .description("Manage plugins: list, install, enable, disable, remove, pin")
+    .option("--version <version>", "pin to a version")
+    .option("--json", "emit JSON")
+    .action((...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const [action, target] = cmd.args;
+      const home = keycodeHome();
+      if (action === "list") {
+        const plugins = listPlugins(home);
+        emit(
+          options.json === true
+            ? plugins
+            : plugins.length === 0
+              ? "No plugins."
+              : plugins
+                  .map(
+                    (plugin) =>
+                      `${plugin.name}  ${plugin.pinnedVersion ?? plugin.version}  ${plugin.enabled ? "enabled" : "disabled"}  ${plugin.trusted ? "trusted" : "untrusted"}`,
+                  )
+                  .join("\n"),
+          options.json,
+        );
+        return;
+      }
+      if (!target) throw new KeycodeError("CONFIG_INVALID", `plugins ${action} requires a target`);
+      if (action === "install") {
+        emit(installPlugin(home, resolve(process.cwd(), target), { trusted: true }), options.json);
+        return;
+      }
+      if (action === "enable" || action === "disable") {
+        const record = setPluginEnabled(home, target, action === "enable");
+        emit(record ?? `Not found: ${target}`, options.json);
+        return;
+      }
+      if (action === "remove") {
+        emit(removePlugin(home, target) ? `Removed ${target}.` : `Not found: ${target}`, options.json);
+        return;
+      }
+      if (action === "pin") {
+        if (typeof options.version !== "string") {
+          throw new KeycodeError("CONFIG_INVALID", "plugins pin requires --version");
+        }
+        emit(pinPlugin(home, target, options.version) ?? `Not found: ${target}`, options.json);
+        return;
+      }
+      throw new KeycodeError("CONFIG_INVALID", `Unknown plugins action: ${action}`);
+    });
+
+  program
+    .command("import")
+    .description("Import Codex, Gemini, and Cursor configuration")
+    .option("--dry-run", "report without writing")
+    .option("--codex <path>", "Codex config path")
+    .option("--gemini <path>", "Gemini config path")
+    .option("--cursor <path>", "Cursor rules directory")
+    .option("--json", "emit JSON")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const result = await importConfigs({
+        home: keycodeHome(),
+        cwd: process.cwd(),
+        dryRun: options.dryRun === true,
+        ...(typeof options.codex === "string" ? { codexPath: options.codex } : {}),
+        ...(typeof options.gemini === "string" ? { geminiPath: options.gemini } : {}),
+        ...(typeof options.cursor === "string" ? { cursorPath: options.cursor } : {}),
+      });
+      emit(result, options.json);
+    });
+
+  program
+    .command("update")
+    .description("Check the release feed for an update")
+    .option("--feed <url>", "release feed URL")
+    .option("--channel <channel>", "stable or latest", "stable")
+    .option("--current <version>", "current version", "0.1.0")
+    .option("--json", "emit JSON")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      if (typeof options.feed !== "string") {
+        throw new KeycodeError("CONFIG_INVALID", "update requires --feed <url>");
+      }
+      const check = await checkForUpdate({
+        feedUrl: options.feed,
+        channel: options.channel === "latest" ? "latest" : "stable",
+        currentVersion: typeof options.current === "string" ? options.current : "0.1.0",
+      });
+      emit(check, options.json);
+    });
+
+  program
+    .command("worktree <action> [name]")
+    .description("Create, list, or remove git worktrees")
+    .option("--base-dir <dir>", "worktree base directory")
+    .option("--force", "force removal")
+    .option("--json", "emit JSON")
+    .action((...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const [action, name] = cmd.args;
+      const repo = process.cwd();
+      if (action === "list") {
+        emit(listWorktrees(repo), options.json);
+        return;
+      }
+      if (!name) throw new KeycodeError("CONFIG_INVALID", `worktree ${action} requires a name`);
+      if (action === "create") {
+        emit(
+          createWorktree(repo, name, {
+            ...(typeof options.baseDir === "string" ? { baseDir: options.baseDir } : {}),
+          }),
+          options.json,
+        );
+        return;
+      }
+      if (action === "remove") {
+        removeWorktree(repo, resolve(repo, name), { force: options.force === true });
+        emit(`Removed ${name}.`, options.json);
+        return;
+      }
+      throw new KeycodeError("CONFIG_INVALID", `Unknown worktree action: ${action}`);
+    });
+
+  program
+    .command("bg <action> [id]")
+    .description("Manage background sessions: start, list, logs, stop, rm, respawn")
+    .option("--name <name>", "session name")
+    .option("--command <command>", "command to run")
+    .option("--args <json>", "arguments as JSON")
+    .option("--json", "emit JSON")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const [action, id] = cmd.args;
+      const home = keycodeHome();
+      const manager = new BackgroundSessions(join(home, "background"));
+      if (action === "start") {
+        if (typeof options.command !== "string") {
+          throw new KeycodeError("CONFIG_INVALID", "bg start requires --command");
+        }
+        const argsList = arrayOption(options.args, "--args") ?? [];
+        emit(
+          manager.start({
+            ...(typeof options.name === "string" ? { name: options.name } : {}),
+            command: options.command,
+            args: argsList,
+            cwd: process.cwd(),
+          }),
+          options.json,
+        );
+        return;
+      }
+      if (action === "list") {
+        emit(manager.list(), options.json);
+        return;
+      }
+      if (!id) throw new KeycodeError("CONFIG_INVALID", `bg ${action} requires an id`);
+      if (action === "logs") {
+        emit(manager.logs(id), options.json);
+        return;
+      }
+      if (action === "stop") {
+        emit(manager.stop(id), options.json);
+        return;
+      }
+      if (action === "rm") {
+        emit(manager.remove(id) ? `Removed ${id}.` : `Not found: ${id}`, options.json);
+        return;
+      }
+      if (action === "respawn") {
+        emit(manager.respawn(id), options.json);
+        return;
+      }
+      throw new KeycodeError("CONFIG_INVALID", `Unknown bg action: ${action}`);
+    });
+
+  program
+    .command("ide")
+    .description("Start the IDE bridge and write its discovery file")
+    .option("--token <token>", "pairing token")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const bridge = new IdeBridge({
+        home: keycodeHome(),
+        cwd: process.cwd(),
+        ...(typeof options.token === "string" ? { token: options.token } : {}),
+      });
+      const started = await bridge.start();
+      stdout.write(
+        `IDE bridge listening on 127.0.0.1:${started.port}\nDiscovery: ${started.discoveryFile}\nToken: ${started.token}\n`,
+      );
+      keepAlive(() => bridge.stop());
+    });
+
+  program
+    .command("remote")
+    .description("Start Remote Control on loopback with a pairing token")
+    .option("--token <token>", "pairing token")
+    .option("--provider <id>", "provider id")
+    .option("--model <id>", "model id")
+    .option("--permission-mode <mode>", "permission mode", "acceptEdits")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const setup = await createAgentSetup({
+        cwd: process.cwd(),
+        provider: typeof options.provider === "string" ? options.provider : undefined,
+        model: typeof options.model === "string" ? options.model : undefined,
+        permissionMode: options.permissionMode as PermissionMode,
+      });
+      const controller = new AbortController();
+      const server = await startRemoteControl({
+        ...(typeof options.token === "string" ? { token: options.token } : {}),
+        handler: {
+          onPrompt: async (prompt) => {
+            const result = await setup.agent.runTurn(prompt, controller.signal);
+            return result.text;
+          },
+          onStop: () => controller.abort(),
+        },
+      });
+      stdout.write(`Remote Control: ${server.url}\nToken: ${server.token}\nSession: ${setup.sessionId}\n`);
+      keepAlive(() => server.close());
+    });
+
+  program
+    .command("gateway")
+    .description("Start the local provider gateway")
+    .option("--api-key <key>", "provider API key to inject")
+    .option("--client-token <token>", "allowed client token (repeatable)", (value: string, previous: string[]) => [...previous, value], [] as string[])
+    .option("--rate <requests>", "requests per window", "60")
+    .option("--window <ms>", "rate-limit window in ms", "60000")
+    .option("--allow-private", "allow private upstream targets")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      if (typeof options.apiKey !== "string") {
+        throw new KeycodeError("CONFIG_INVALID", "gateway requires --api-key");
+      }
+      const clientTokens = Array.isArray(options.clientToken) ? (options.clientToken as string[]) : [];
+      if (clientTokens.length === 0) {
+        throw new KeycodeError("CONFIG_INVALID", "gateway requires at least one --client-token");
+      }
+      const server = await startGateway({
+        apiKey: options.apiKey,
+        clientTokens,
+        rateLimit: {
+          requests: Number(options.rate ?? 60),
+          windowMs: Number(options.window ?? 60_000),
+        },
+        allowPrivate: options.allowPrivate === true,
+      });
+      stdout.write(`Gateway listening on ${server.url}\n`);
+      keepAlive(() => server.close());
+    });
+
+  program
+    .command("pr <action> [number]")
+    .description("Review a pull request diff")
+    .option("--repo <owner/name>", "repository")
+    .option("--security", "only high-severity findings")
+    .option("--comment", "post the review as a comment")
+    .option("--token <token>", "GitHub token for posting")
+    .option("--json", "emit JSON")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const [action, numberRaw] = cmd.args;
+      if (action !== "review") throw new KeycodeError("CONFIG_INVALID", `Unknown pr action: ${action}`);
+      if (typeof options.repo !== "string") {
+        throw new KeycodeError("CONFIG_INVALID", "pr review requires --repo");
+      }
+      const number = Number(numberRaw);
+      const diff = await getPullRequestDiff({ repo: options.repo, number });
+      const findings = options.security === true ? securityReview(diff) : reviewDiff(diff);
+      const comment = buildPrComment(findings);
+      let posted: { ok: boolean; status: number } | null = null;
+      if (options.comment === true) {
+        if (typeof options.token !== "string") {
+          throw new KeycodeError("CONFIG_INVALID", "pr review --comment requires --token");
+        }
+        posted = await postIssueComment({
+          token: options.token,
+          repo: options.repo,
+          issueNumber: number,
+          body: comment,
+        });
+      }
+      emit(options.json === true ? { findings, comment, posted } : comment, options.json);
+    });
+
+  program
+    .command("artifacts <action> [id]")
+    .description("Create, publish, preview, inspect, or annotate local artifacts")
+    .option("--name <name>", "artifact name")
+    .option("--file <path>", "HTML file")
+    .option("--version <n>", "version")
+    .option("--text <text>", "comment text")
+    .option("--key <key>", "data key")
+    .option("--value <value>", "data value")
+    .option("--token <token>", "preview token", "preview")
+    .option("--json", "emit JSON")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const [action, id] = cmd.args;
+      const home = keycodeHome();
+      const store = new ArtifactStore(join(home, "artifacts"));
+      const version = options.version === undefined ? undefined : Number(options.version);
+      if (action === "create") {
+        if (typeof options.name !== "string" || typeof options.file !== "string") {
+          throw new KeycodeError("CONFIG_INVALID", "artifacts create requires --name and --file");
+        }
+        const artifact = store.create(options.name, readFileSync(resolve(process.cwd(), options.file), "utf8"));
+        emit({ id: artifact.id, version: 1 }, options.json);
+        return;
+      }
+      if (action === "list") {
+        emit(store.list(), options.json);
+        return;
+      }
+      if (!id) throw new KeycodeError("CONFIG_INVALID", `artifacts ${action} requires an id`);
+      if (action === "publish") {
+        if (typeof options.file !== "string") {
+          throw new KeycodeError("CONFIG_INVALID", "artifacts publish requires --file");
+        }
+        const artifact = store.publish(id, readFileSync(resolve(process.cwd(), options.file), "utf8"));
+        emit({ id: artifact.id, version: artifact.versions.length }, options.json);
+        return;
+      }
+      if (action === "inspect") {
+        emit(store.inspect(id, version), options.json);
+        return;
+      }
+      if (action === "comment") {
+        if (typeof options.text !== "string") {
+          throw new KeycodeError("CONFIG_INVALID", "artifacts comment requires --text");
+        }
+        const targetVersion = version ?? store.get(id)?.version ?? 1;
+        emit(store.comment(id, targetVersion, options.text) ? "Comment added." : "Artifact not found.", options.json);
+        return;
+      }
+      if (action === "data") {
+        if (typeof options.key !== "string") {
+          throw new KeycodeError("CONFIG_INVALID", "artifacts data requires --key");
+        }
+        const targetVersion = version ?? store.get(id)?.version ?? 1;
+        emit(
+          store.setData(id, targetVersion, options.key, options.value ?? "") ? "Data set." : "Artifact not found.",
+          options.json,
+        );
+        return;
+      }
+      if (action === "preview") {
+        const server = await startPreview(store, {
+          token: typeof options.token === "string" ? options.token : "preview",
+        });
+        const versionPath = version === undefined ? "" : `/${version}`;
+        stdout.write(
+          `Preview: ${server.url}/artifacts/${id}${versionPath}?token=${String(options.token ?? "preview")}\n`,
+        );
+        keepAlive(() => server.close());
+        return;
+      }
+      throw new KeycodeError("CONFIG_INVALID", `Unknown artifacts action: ${action}`);
+    });
+
+  program
+    .command("codemode [code]")
+    .description("Evaluate JavaScript in an opt-in persistent Code Mode session")
+    .option("--file <path>", "read code from a file")
+    .option("--reset", "reset the session state")
+    .option("--json", "emit JSON")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const [codeArg] = cmd.args;
+      const code =
+        typeof options.file === "string"
+          ? readFileSync(resolve(process.cwd(), options.file), "utf8")
+          : codeArg;
+      if (!code) throw new KeycodeError("CONFIG_INVALID", "codemode requires code or --file");
+      const tool = createCodeModeTool({ enabled: true });
+      const result = await tool.execute(
+        { code, ...(options.reset === true ? { reset: true } : {}) },
+        toolContext(keycodeHome(), process.cwd()),
+      );
+      const text = result.content
+        .map((block) => (block.type === "text" ? block.text : `[${block.type}]`))
+        .join("\n");
+      emit(options.json === true ? { ok: result.ok, text } : text, options.json);
+      if (!result.ok) process.exitCode = 1;
+    });
+
+  program
+    .command("lsp <file>")
+    .description("Start a language server and print diagnostics")
+    .option("--command <command>", "language server command")
+    .option("--args <json>", "language server arguments as JSON")
+    .option("--language <id>", "language id", "typescript")
+    .option("--hover <line:character>", "request hover at a position")
+    .option("--json", "emit JSON")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const [file] = cmd.args;
+      if (typeof options.command !== "string") {
+        throw new KeycodeError("CONFIG_INVALID", "lsp requires --command");
+      }
+      if (!file) throw new KeycodeError("CONFIG_INVALID", "lsp requires a file");
+      const path = resolve(process.cwd(), file);
+      const uri = pathToFileURL(path).toString();
+      const client = new LspClient({
+        command: options.command,
+        args: arrayOption(options.args, "--args") ?? [],
+        cwd: process.cwd(),
+        rootUri: pathToFileURL(process.cwd()).toString(),
+        timeoutMs: 10_000,
+      });
+      await client.start();
+      await client.initialize();
+      client.openDocument(uri, typeof options.language === "string" ? options.language : extname(path).replace(".", ""), readFileSync(path, "utf8"));
+      const diagnostics = await client.waitForDiagnostics(uri);
+      let hover: unknown = null;
+      if (typeof options.hover === "string") {
+        const [line, character] = options.hover.split(":").map(Number);
+        hover = await client.hover(uri, line ?? 0, character ?? 0);
+      }
+      emit(options.json === true ? { diagnostics, hover } : diagnostics, options.json);
+      client.stop();
+    });
+
+  program
+    .command("memory <action> [text]")
+    .description("Manage auto-memory: list, search, add, remove, pause, resume")
+    .option("--id <id>", "entry id")
+    .option("--query <query>", "search query")
+    .option("--json", "emit JSON")
+    .action((...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const [action, text] = cmd.args;
+      const home = keycodeHome();
+      const cwd = process.cwd();
+      const store = new AutoMemoryStore(join(projectDir(home, cwd), "memory.json"));
+      if (action === "list") {
+        emit(store.list(), options.json);
+        return;
+      }
+      if (action === "search") {
+        emit(store.recall(typeof options.query === "string" ? options.query : ""), options.json);
+        return;
+      }
+      if (action === "add") {
+        if (!text) throw new KeycodeError("CONFIG_INVALID", "memory add requires text");
+        emit(store.add(text), options.json);
+        return;
+      }
+      if (action === "remove") {
+        if (typeof options.id !== "string") throw new KeycodeError("CONFIG_INVALID", "memory remove requires --id");
+        emit(store.remove(options.id) ? "Removed." : "Not found.", options.json);
+        return;
+      }
+      if (action === "pause") {
+        store.pause();
+        emit("Auto-memory paused.", options.json);
+        return;
+      }
+      if (action === "resume") {
+        store.resume();
+        emit("Auto-memory resumed.", options.json);
+        return;
+      }
+      throw new KeycodeError("CONFIG_INVALID", `Unknown memory action: ${action}`);
+    });
+
+  program
+    .command("workflow <script>")
+    .description("Run a workflow script with checkpoints and resume")
+    .option("--context <json>", "workflow context as JSON")
+    .option("--checkpoint-dir <dir>", "checkpoint directory")
+    .option("--budget <usd>", "budget in USD")
+    .option("--json", "emit JSON")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const [script] = cmd.args;
+      if (!script) throw new KeycodeError("CONFIG_INVALID", "workflow requires a script path");
+      const result = await runWorkflow({
+        scriptPath: resolve(process.cwd(), script),
+        checkpointDir:
+          typeof options.checkpointDir === "string"
+            ? options.checkpointDir
+            : join(keycodeHome(), "workflows"),
+        context:
+          typeof options.context === "string"
+            ? (JSON.parse(options.context) as Record<string, unknown>)
+            : {},
+        ...(typeof options.budget === "string" ? { budgetUsd: Number(options.budget) } : {}),
+      });
+      emit(result, options.json);
+      if (result.status === "failed") process.exitCode = 1;
+    });
+
+  program
+    .command("loops <action> [id]")
+    .description("Manage cron loops: list, add, remove, run")
+    .option("--cron <expression>", "cron expression")
+    .option("--command <command>", "command to run")
+    .option("--timezone <timezone>", "timezone label")
+    .option("--json", "emit JSON")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const [action, id] = cmd.args;
+      const manager = new LoopManager(join(keycodeHome(), "loops.json"));
+      if (action === "list") {
+        emit(manager.list(), options.json);
+        return;
+      }
+      if (action === "add") {
+        if (typeof options.cron !== "string" || typeof options.command !== "string") {
+          throw new KeycodeError("CONFIG_INVALID", "loops add requires --cron and --command");
+        }
+        emit(
+          manager.add({
+            cron: options.cron,
+            command: options.command,
+            ...(typeof options.timezone === "string" ? { timezone: options.timezone } : {}),
+          }),
+          options.json,
+        );
+        return;
+      }
+      if (!id) throw new KeycodeError("CONFIG_INVALID", `loops ${action} requires an id`);
+      if (action === "remove") {
+        emit(manager.remove(id) ? "Removed." : "Not found.", options.json);
+        return;
+      }
+      if (action === "run") {
+        const ran = await manager.runDue(new Date(), async (job) => {
+          await runCommand({ command: job.command, cwd: process.cwd(), timeoutMs: 60_000 });
+        });
+        emit(`Ran ${ran} loop(s).`, options.json);
+        return;
+      }
+      throw new KeycodeError("CONFIG_INVALID", `Unknown loops action: ${action}`);
+    });
+
+  program
+    .command("notify")
+    .description("Send a test notification")
+    .option("--event <event>", "idle, permission_required, task_complete, or input_needed", "idle")
+    .option("--text <text>", "notification text", "keycode notification")
+    .option("--webhook <url>", "webhook URL")
+    .option("--json", "emit JSON")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const channels: NotificationChannel[] = [
+        {
+          name: "stdout",
+          send: (event, text) => {
+            stdout.write(`${event}: ${text}\n`);
+          },
+        },
+      ];
+      if (typeof options.webhook === "string") {
+        channels.push(webhookChannel(options.webhook));
+      }
+      const notifier = new Notifier({ channels });
+      const sent = await notifier.notify(
+        options.event as "idle" | "permission_required" | "task_complete" | "input_needed",
+        typeof options.text === "string" ? options.text : "keycode notification",
+      );
+      emit({ sent }, options.json);
+    });
+
+  program
+    .command("otel")
+    .description("Send one OTLP metric to a local collector")
+    .option("--endpoint <url>", "OTLP HTTP endpoint")
+    .option("--name <name>", "metric name", "keycode.cli")
+    .option("--value <value>", "metric value", "1")
+    .option("--attributes <json>", "attributes as JSON")
+    .option("--json", "emit JSON")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      if (typeof options.endpoint !== "string") {
+        throw new KeycodeError("CONFIG_INVALID", "otel requires --endpoint");
+      }
+      const attributes =
+        typeof options.attributes === "string"
+          ? (JSON.parse(options.attributes) as Record<string, string | number>)
+          : {};
+      const exporter = new OtelExporter({ endpoint: options.endpoint, serviceName: "keycode-cli" });
+      exporter.record({
+        name: typeof options.name === "string" ? options.name : "keycode.cli",
+        value: Number(options.value ?? 1),
+        attributes,
+      });
+      const ok = await exporter.flush();
+      emit({ ok }, options.json);
+      if (!ok) process.exitCode = 1;
+    });
+
+  program
+    .command("browser <action> [url]")
+    .description("Browser automation through a driver module")
+    .option("--driver <module>", "driver module exporting createBrowserDriver")
+    .option("--allow <domains>", "comma-separated allowed domains", "")
+    .option("--selector <selector>", "CSS selector")
+    .option("--text <text>", "text to type")
+    .option("--json", "emit JSON")
+    .action(async (...args: unknown[]) => {
+      const cmd = args[args.length - 1] as Command;
+      const options = opts(cmd);
+      const [action, url] = cmd.args;
+      if (typeof options.driver !== "string") {
+        throw new KeycodeError(
+          "CONFIG_INVALID",
+          "Browser automation requires --driver <module> exporting createBrowserDriver.",
+        );
+      }
+      const module = (await import(pathToFileURL(resolve(process.cwd(), options.driver)).href)) as {
+        createBrowserDriver?: (options: unknown) => BrowserDriver | Promise<BrowserDriver>;
+        default?: BrowserDriver;
+      };
+      const driver =
+        module.createBrowserDriver !== undefined
+          ? await module.createBrowserDriver({})
+          : module.default;
+      if (!driver) {
+        throw new KeycodeError("CONFIG_INVALID", "Driver module does not export createBrowserDriver or a default driver");
+      }
+      const allowedDomains = String(options.allow ?? "")
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0);
+      const tool = createBrowserTool({ driver, allowedDomains });
+      const result = await tool.execute(
+        {
+          action: action as "navigate" | "click" | "type" | "read_dom" | "screenshot",
+          ...(url === undefined ? {} : { url }),
+          ...(typeof options.selector === "string" ? { selector: options.selector } : {}),
+          ...(typeof options.text === "string" ? { text: options.text } : {}),
+        },
+        toolContext(keycodeHome(), process.cwd()),
+      );
+      const text = result.content
+        .map((block) => (block.type === "text" ? block.text : `[${block.type}]`))
+        .join("\n");
+      emit(options.json === true ? { ok: result.ok, text } : text, options.json);
+      if (!result.ok) process.exitCode = 1;
+    });
+}

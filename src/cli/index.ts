@@ -11,6 +11,7 @@ import { SessionStore } from "../storage/session.js";
 import { AuditLog } from "../permissions/audit.js";
 import { runDoctor, formatDoctor } from "./doctor.js";
 import { authCommand } from "./auth.js";
+import { registerExtraCommands } from "./extra.js";
 import { resolve } from "node:path";
 
 export const VERSION = "0.1.0";
@@ -280,6 +281,8 @@ program
       `${JSON.stringify({ settings: loaded.settings, sources: loaded.sources, warnings: loaded.warnings }, null, 2)}\n`,
     );
   });
+
+registerExtraCommands(program);
 
 export async function main(argv = process.argv): Promise<void> {
   await program.parseAsync(argv);

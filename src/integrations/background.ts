@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
-import { closeSync, existsSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ensureDir } from "../util/fsx.js";
 import { newId } from "../util/ids.js";
@@ -35,6 +35,33 @@ function processAlive(pid: number): boolean {
   }
 }
 
+function killTree(pid: number): void {
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { windowsHide: true });
+  } else {
+    try {
+      process.kill(-pid, "SIGKILL");
+    } catch {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // Already gone.
+      }
+    }
+  }
+}
+
+const RUNNER_SOURCE = [
+  'import { spawn } from "node:child_process";',
+  'import { openSync, closeSync } from "node:fs";',
+  "const [log, command, ...args] = process.argv.slice(2);",
+  'const fd = openSync(log, "a");',
+  'const child = spawn(command, args, { stdio: ["ignore", fd, fd], windowsHide: true, env: process.env });',
+  "closeSync(fd);",
+  "child.on(\"exit\", (code) => process.exit(code ?? 0));",
+  "child.on(\"error\", () => process.exit(1));",
+].join("\n");
+
 export function isProcessAlive(pid: number): boolean {
   return processAlive(pid);
 }
@@ -45,6 +72,7 @@ export class BackgroundSessions {
   constructor(dir: string) {
     this.dir = dir;
     ensureDir(dir);
+    writeFileSync(join(dir, "runner.mjs"), RUNNER_SOURCE);
   }
 
   private recordPath(id: string): string {
@@ -85,15 +113,18 @@ export class BackgroundSessions {
   start(options: StartBackgroundOptions): BackgroundSessionRecord {
     const id = newId("bg");
     const log = join(this.dir, `${id}.log`);
-    const fd = openSync(log, "a");
-    const child = spawn(options.command, options.args ?? [], {
-      cwd: options.cwd,
-      env: { ...process.env, ...options.env },
-      windowsHide: true,
-      detached: false,
-      stdio: ["ignore", fd, fd],
-    });
-    closeSync(fd);
+    const child = spawn(
+      process.execPath,
+      [join(this.dir, "runner.mjs"), log, options.command, ...(options.args ?? [])],
+      {
+        cwd: options.cwd,
+        env: { ...process.env, ...options.env },
+        windowsHide: true,
+        detached: true,
+        stdio: "ignore",
+      },
+    );
+    child.unref();
     const record: BackgroundSessionRecord = {
       id,
       name: options.name ?? id.slice(0, 8),
@@ -129,11 +160,7 @@ export class BackgroundSessions {
     const record = this.read(id);
     if (!record) throw new Error(`Background session not found: ${id}`);
     if (record.pid !== null && processAlive(record.pid)) {
-      try {
-        process.kill(record.pid, "SIGTERM");
-      } catch {
-        // Already gone.
-      }
+      killTree(record.pid);
     }
     record.status = "stopped";
     this.write(record);
