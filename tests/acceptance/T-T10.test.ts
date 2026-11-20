@@ -47,5 +47,9 @@ describe("T-T10: TodoWrite", () => {
     const rendered = renderTodos(ctx.state.todos);
     expect(rendered).toContain("[x] one");
     expect(rendered).toContain("[x] two");
+    const pending = renderTodos([{ id: "p1", content: "pending task", status: "pending" }]);
+    expect(pending).toContain("[ ] pending task");
+    const inProgress = renderTodos([{ id: "i1", content: "active task", status: "in_progress" }]);
+    expect(inProgress).toContain("[>] active task");
   });
 });

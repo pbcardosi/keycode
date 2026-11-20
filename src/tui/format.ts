@@ -55,7 +55,7 @@ export function renderToolRow(status: "pending" | "success" | "error" | "denied"
 export function renderTodos(todos: Array<{ id: string; content: string; status: "pending" | "in_progress" | "completed" }>): string {
   return todos
     .map((todo) => {
-      const mark = todo.status === "completed" ? "✔" : todo.status === "in_progress" ? "→" : "◻";
+      const mark = todo.status === "completed" ? "[x]" : todo.status === "in_progress" ? "[>]" : "[ ]";
       return `${mark} ${todo.content}`;
     })
     .join("\n");
@@ -64,7 +64,7 @@ export function renderTodos(todos: Array<{ id: string; content: string; status: 
 export function renderTranscript(messages: Message[]): string {
   return messages
     .map((message) => {
-      const label = message.role === "user" ? "You" : "Assistant";
+      const label = message.role === "user" ? "You" : "keycode";
       const text = message.content
         .filter((block): block is Extract<ContentBlock, { type: "text" }> => block.type === "text")
         .map((block) => renderMarkdown(block.text))
