@@ -36,13 +36,16 @@ export function createAgentTool(
       if (ctx.signal.aborted) {
         return toolError("Subagent aborted.", { code: "ABORTED" });
       }
+      const model = input.model ?? definition?.model;
+      const tools = input.tools ?? definition?.tools;
+      const name = input.description ?? definition?.name;
       const result = await runner(
         {
           prompt: input.prompt,
-          ...(input.model ?? definition?.model) === undefined ? {} : { model: input.model ?? definition?.model },
-          ...(input.tools ?? definition?.tools) === undefined ? {} : { tools: input.tools ?? definition?.tools },
+          ...(model === undefined ? {} : { model }),
+          ...(tools === undefined ? {} : { tools }),
           ...(definition?.permissionMode === undefined ? {} : { permissionMode: definition.permissionMode }),
-          ...(input.description ?? definition?.name) === undefined ? {} : { name: input.description ?? definition?.name },
+          ...(name === undefined ? {} : { name }),
           ...(definition?.body === undefined ? {} : { body: definition.body }),
         },
         ctx,

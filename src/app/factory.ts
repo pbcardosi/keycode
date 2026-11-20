@@ -22,7 +22,10 @@ import type { RuleScope } from "../contracts/permissions.js";
 import { CommandHookDispatcher, parseHookConfig, type HookConfig } from "../extensions/hooks.js";
 import { discoverCommands, type CommandDefinition } from "../extensions/commands.js";
 import { discoverSkills, type SkillMetadata } from "../extensions/skills.js";
+import { discoverAgents, type AgentDefinition } from "../extensions/customAgents.js";
 import { createSkillTool } from "../tools/skill.js";
+import { createAgentTool } from "../tools/agent.js";
+import { narrowPermissionMode, type SubagentRunner } from "./subagent.js";
 import { buildSystemPrompt, promptHash, type SystemPromptOptions } from "../core/context.js";
 import { createCoreTools, toolSpecs } from "../tools/index.js";
 import { BudgetGuard, type Pricing } from "../providers/budget.js";
@@ -81,6 +84,7 @@ export interface AgentSetup {
   toolNames: string[];
   commands: CommandDefinition[];
   skills: SkillMetadata[];
+  agents: AgentDefinition[];
 }
 
 function displayProviderAuthError(): KeycodeError {
@@ -228,11 +232,21 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
 
   const view = store.load(sessionId);
   const skills = discoverSkills({ cwd, home, trusted });
+  const agentDefinitions = discoverAgents({ cwd, home, trusted });
+  let subagentRunner: SubagentRunner | undefined;
   const baseTools = options.tools ?? createCoreTools();
-  const tools = (baseTools.some((tool) => tool.name === "Skill")
+  const withExtensions = baseTools.some((tool) => tool.name === "Skill")
     ? baseTools
-    : [...baseTools, createSkillTool(skills)]
-  ).filter((tool) => !managedDeniedTools(home, env).includes(tool.name));
+    : [...baseTools, createSkillTool(skills)];
+  const tools = [
+    ...withExtensions,
+    createAgentTool(agentDefinitions, async (spec, ctx) => {
+      if (!subagentRunner) {
+        throw new KeycodeError("CONFIG_INVALID", "Subagent runner is not available");
+      }
+      return subagentRunner(spec, ctx);
+    }),
+  ].filter((tool) => !managedDeniedTools(home, env).includes(tool.name));
   const specs = toolSpecs(tools);
 
   const roots = [cwd, ...(options.addDirs ?? []).map((dir) => resolve(cwd, dir))];
@@ -293,6 +307,70 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   }
 
   const logger = options.logger ?? (options.debug === true ? createLogger({ debug: true }) : silentLogger);
+
+  subagentRunner = async (spec, ctx) => {
+    const childHeader = store.create({
+      provider: providerId,
+      model: spec.model ?? model,
+      parentId: sessionId,
+      ...(spec.name === undefined ? {} : { name: spec.name }),
+    });
+    const childTools = tools.filter(
+      (tool) => tool.name !== "Agent" && (spec.tools === undefined || spec.tools.includes(tool.name)),
+    );
+    const childMode = narrowPermissionMode(mode, spec.permissionMode);
+    const childPermissions = new PermissionService({
+      mode: childMode,
+      rules,
+      cwd,
+      roots,
+      audit,
+      sessionId: childHeader.id,
+      managedDenyTools: managedDeniedTools(home, env),
+      trusted,
+      ...(options.prompter === undefined ? {} : { prompter: options.prompter }),
+    });
+    const childSystemPrompt =
+      spec.body === undefined
+        ? systemPrompt
+        : `${systemPrompt}\n\n# Subagent instructions\n\n${spec.body}`;
+    const childAgent = new Agent({
+      sessionId: childHeader.id,
+      store,
+      provider: resolved.provider,
+      providerId,
+      model: spec.model ?? model,
+      tools: childTools,
+      permissions: childPermissions,
+      home,
+      cwd,
+      workspaceRoots: roots,
+      systemPrompt: childSystemPrompt,
+      buildPrompt,
+      ...(budget === undefined ? {} : { budget }),
+      ...(options.pricing === undefined ? {} : { pricing: options.pricing }),
+      ...(resolved.capabilities === undefined ? {} : { capabilities: resolved.capabilities }),
+      ...(options.effort === undefined ? {} : { effort: options.effort }),
+      checkpointStore: checkpoints,
+      ...(hooks === undefined ? {} : { hooks }),
+      ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }),
+      logger,
+    });
+    await hooks?.run("SubagentStart", {
+      session_id: childHeader.id,
+      hook_event_name: "SubagentStart",
+      cwd,
+    });
+    const childResult = await childAgent.runTurn(spec.prompt, ctx.signal);
+    await hooks?.run("SubagentStop", {
+      session_id: childHeader.id,
+      hook_event_name: "SubagentStop",
+      cwd,
+      stop_reason: childResult.stopReason,
+    });
+    return { sessionId: childHeader.id, text: childResult.text };
+  };
+
   const agent = new Agent({
     sessionId,
     store,
@@ -340,6 +418,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     toolNames: tools.map((tool) => tool.name),
     commands,
     skills,
+    agents: agentDefinitions,
   };
 }
 

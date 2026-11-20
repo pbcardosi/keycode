@@ -43,6 +43,7 @@ export const COMMAND_HELP: Array<[string, string]> = [
   ["/sessions", "List recent sessions"],
   ["/permissions", "Show permission mode and rules"],
   ["/skills", "List available skills"],
+  ["/agents", "List available subagents"],
   ["/memory", "Show loaded memory files"],
   ["/status", "Show provider, model, and session"],
   ["/exit", "Exit keycode"],
@@ -234,6 +235,15 @@ export async function executeCommand(line: string, ctx: CommandContext): Promise
         setup.skills.length === 0
           ? "No skills."
           : setup.skills.map((skill) => `${skill.name}  ${skill.description}`).join("\n"),
+      );
+      return { handled: true };
+    case "agents":
+      out(
+        setup.agents.length === 0
+          ? "No subagents."
+          : setup.agents
+              .map((definition) => `${definition.name}  ${definition.description}`)
+              .join("\n"),
       );
       return { handled: true };
     case "permissions":
