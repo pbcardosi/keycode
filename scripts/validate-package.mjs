@@ -26,7 +26,8 @@ if (!Array.isArray(pkg.files) || !pkg.files.includes("dist")) {
 }
 
 if (pkg.license !== "Apache-2.0") failures.push("license must be Apache-2.0");
-if (pkg.private !== true) failures.push("private must stay true until a registry name is chosen");
+if (pkg.private !== false) failures.push("private must be false for a publishable package");
+if (typeof pkg.name !== "string" || pkg.name.length === 0) failures.push("package name is required");
 if (pkg.engines?.node !== ">=22") failures.push("engines.node must be >=22");
 
 if (failures.length > 0) {

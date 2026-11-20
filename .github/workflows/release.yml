@@ -20,6 +20,7 @@ jobs:
       - run: npm run verify
       - run: npm run pack:smoke
       - run: mkdir -p artifacts && npm pack --pack-destination artifacts
-      - run: gh release create "${GITHUB_REF_NAME}" artifacts/*.tgz --generate-notes
+      - run: node scripts/checksums.mjs artifacts
+      - run: gh release create "${GITHUB_REF_NAME}" artifacts/*.tgz artifacts/SHA256SUMS --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

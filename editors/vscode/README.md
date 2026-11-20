@@ -12,7 +12,7 @@ sessions, Markdown, and model switching are all available unchanged.
 
   ```bash
   npm install && npm run build && npm pack
-  npm install -g ./keycode-cli-0.1.0.tgz
+  npm install -g ./keycode-ai-0.1.0.tgz
   keycode --version
   ```
 

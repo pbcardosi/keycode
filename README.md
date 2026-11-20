@@ -28,13 +28,14 @@ See `FEATURES.md` for the full free-key matrix.
 
 ## Install
 
-The package is not on a registry yet. Build a tarball and install it globally:
+The npm package name is `keycode-ai`, but it is not published to the registry
+yet. Build a tarball and install it globally:
 
 ```bash
 npm install
 npm run pack:smoke      # verifies the tarball in a clean consumer project
 npm pack
-npm install -g ./keycode-cli-0.1.0.tgz
+npm install -g ./keycode-ai-0.1.0.tgz
 keycode --version
 ```
 
@@ -58,8 +59,8 @@ node dist/cli/index.js --provider ollama
 ### Upgrade and remove
 
 ```bash
-npm install -g ./keycode-cli-<new-version>.tgz
-npm uninstall -g keycode-cli
+npm install -g ./keycode-ai-<new-version>.tgz
+npm uninstall -g keycode-ai
 ```
 
 The package ships `dist/`, `README.md`, `LICENSE`, and `CHANGELOG.md` only.
@@ -138,9 +139,13 @@ tool, or switch to a tool-capable model.
 ## Release
 
 Tag a commit with `v<version>` and push the tag. The release workflow reruns
-`npm run verify` and `npm run pack:smoke`, packs the tarball, and attaches it to
-a GitHub release. Publishing to npm requires choosing an available package
-name, removing `"private": true`, and adding an `NPM_TOKEN`-based publish step.
+`npm run verify` and `npm run pack:smoke`, packs the tarball, writes
+`SHA256SUMS`, and attaches both to a GitHub release.
+
+The npm package is `keycode-ai`; the executable is `keycode`. Publishing uses
+the **Publish npm** workflow with an `NPM_TOKEN` secret, or a local
+`npm publish --provenance --access public`. See `docs/releasing.md` and
+`docs/install.md`.
 
 ---
 

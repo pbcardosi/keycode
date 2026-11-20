@@ -1,7 +1,7 @@
 {
-  "name": "keycode-cli",
+  "name": "keycode-ai",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "description": "KeyCode — a free, local-first, bring-your-own-key coding agent.",
   "license": "Apache-2.0",
@@ -36,6 +36,8 @@
     "pack:smoke": "npm run build && node scripts/pack-smoke.mjs",
     "extension:smoke": "node scripts/extension-smoke.mjs",
     "browser:smoke": "npm run build && node scripts/browser-smoke.mjs",
+    "release:check": "npm run verify && npm run pack:smoke && npm publish --dry-run",
+    "release:checksums": "node scripts/checksums.mjs",
     "prepack": "npm run build",
     "verify": "npm run validate:spec && npm run validate:package && npm run validate:extension && npm run typecheck && npm test"
   },

@@ -5,6 +5,14 @@ import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const work = mkdtempSync(join(tmpdir(), "keycode-pack-"));
+const packageJson = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+const packageName = packageJson.name;
+const packagePath = join(consumerRoot(), "node_modules", ...packageName.split("/"));
+const binName = Object.keys(packageJson.bin ?? {})[0] ?? "keycode";
+
+function consumerRoot() {
+  return join(work, "consumer");
+}
 
 function run(command, args, options) {
   const shared = {
@@ -77,12 +85,14 @@ try {
     cwd: consumer,
   });
 
-  const installed = JSON.parse(
-    readFileSync(join(consumer, "node_modules", "keycode-cli", "package.json"), "utf8"),
+  const installed = JSON.parse(readFileSync(join(packagePath, "package.json"), "utf8"));
+  const installedBin = installed.bin?.[binName];
+  assert(
+    installedBin === "./dist/cli/index.js" || installedBin === "dist/cli/index.js",
+    `installed bin mapping is wrong: ${binName}=${JSON.stringify(installedBin)} all=${JSON.stringify(installed.bin)}`,
   );
-  assert(installed.bin?.keycode === "./dist/cli/index.js", "installed bin mapping is wrong");
 
-  const entrypoint = join(consumer, "node_modules", "keycode-cli", "dist", "cli", "index.js");
+  const entrypoint = join(packagePath, "dist", "cli", "index.js");
   assert(
     readFileSync(entrypoint, "utf8").startsWith("#!/usr/bin/env node"),
     "installed entry point lost its shebang",
@@ -92,7 +102,7 @@ try {
     consumer,
     "node_modules",
     ".bin",
-    process.platform === "win32" ? "keycode.cmd" : "keycode",
+    process.platform === "win32" ? `${binName}.cmd` : binName,
   );
   const version = run(bin, ["--version"], { cwd: consumer });
   assert(version.stdout.trim() === installed.version, `unexpected version: ${version.stdout}`);

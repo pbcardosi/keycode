@@ -1043,7 +1043,7 @@ acceptance test may contain multiple assertions, but it remains one test.
 | Storage | JSONL sessions, JSON config | Append-only, debuggable, no native dependency. |
 | Default provider | Ollama if healthy, else Gemini free tier | Local-first, then free hosted. |
 | Telemetry | Off by default | Privacy and trust. |
-| Package name | `keycode-cli` (placeholder) | `keycode` is likely taken on npm; rename before publish. |
+| Package name | `keycode-ai` | `keycode` and `keycode-cli` are taken on npm; the executable stays `keycode`. |
 | Artifact preview | Loopback-only static server | No public exposure by default. |
 | Remote Control | Loopback plus explicit LAN opt-in | Safer default. |
 

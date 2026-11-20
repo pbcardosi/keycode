@@ -75,6 +75,20 @@ export interface RemoteArtifact {
   createdAt: string;
 }
 
+export interface RemoteProviderStatus {
+  id: string;
+  name: string;
+  models: string[];
+  defaultModel: string;
+  free: boolean;
+  local: boolean;
+  configured: boolean;
+  source: "env" | "config" | "keychain" | "helper" | null;
+  fingerprint: string | null;
+  apiKeyEnv: string | null;
+  current: boolean;
+}
+
 export interface RemoteHandler {
   onPrompt(prompt: string): Promise<string>;
   onStop?: (() => void) | undefined;
@@ -97,6 +111,15 @@ export interface RemoteHandler {
   artifacts?: (() => Promise<RemoteArtifact[]> | RemoteArtifact[]) | undefined;
   artifactPreview?:
     | ((id: string, version?: number | undefined) => Promise<string | null> | string | null)
+    | undefined;
+  providerStatuses?:
+    | (() => Promise<RemoteProviderStatus[]> | RemoteProviderStatus[])
+    | undefined;
+  setProviderKey?:
+    | ((provider: string, key: string) => Promise<RemoteProviderStatus[]> | RemoteProviderStatus[])
+    | undefined;
+  removeProviderKey?:
+    | ((provider: string) => Promise<RemoteProviderStatus[]> | RemoteProviderStatus[])
     | undefined;
 }
 
@@ -293,6 +316,21 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
     client.send(JSON.stringify({ type: "artifacts", artifacts: await artifacts() }));
   };
 
+  const providerStatuses = async (): Promise<RemoteProviderStatus[]> => {
+    if (options.handler.providerStatuses === undefined) return [];
+    try {
+      return await options.handler.providerStatuses();
+    } catch {
+      return [];
+    }
+  };
+
+  const sendProviders = async (client: WsConnection): Promise<void> => {
+    client.send(
+      JSON.stringify({ type: "providers", providers: await providerStatuses() }),
+    );
+  };
+
   const history = (): unknown[] => {
     try {
       return options.handler.history?.() ?? [];
@@ -454,6 +492,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
     void sendSessions(connection);
     void sendCatalog(connection);
     void sendArtifacts(connection);
+    void sendProviders(connection);
 
     connection.onClose(() => {
       clients.delete(connection);
@@ -468,6 +507,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         name?: string;
         provider?: string;
         model?: string;
+        key?: string;
         choice?: string;
         selection?: unknown;
         answers?: unknown;
