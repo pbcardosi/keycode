@@ -53,6 +53,7 @@ try {
     "dist/cli/index.js",
     "dist/web/public/index.html",
     "dist/web/public/app.js",
+    "dist/web/public/markdown.js",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",

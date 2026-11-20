@@ -28,11 +28,24 @@ export interface RemotePermissionBridge {
   resolve(id: string, choice: string): boolean;
 }
 
+export interface RemoteSession {
+  id: string;
+  name: string;
+  messageCount: number;
+  createdAt: string;
+  provider: string;
+  model: string;
+  parentId?: string | undefined;
+}
+
 export interface RemoteHandler {
   onPrompt(prompt: string): Promise<string>;
   onStop?: (() => void) | undefined;
   subscribe?: ((listener: (event: unknown) => void) => () => void) | undefined;
   info?: (() => RemoteInfo) | undefined;
+  sessions?: (() => Promise<RemoteSession[]> | RemoteSession[]) | undefined;
+  history?: (() => unknown[]) | undefined;
+  resume?: ((id: string | null) => Promise<RemoteInfo> | RemoteInfo) | undefined;
 }
 
 export interface RemoteServerOptions {
@@ -57,6 +70,7 @@ const ASSETS: Record<string, StaticAsset> = {
   "/": { file: "index.html", type: "text/html; charset=utf-8" },
   "/index.html": { file: "index.html", type: "text/html; charset=utf-8" },
   "/app.js": { file: "app.js", type: "text/javascript; charset=utf-8" },
+  "/markdown.js": { file: "markdown.js", type: "text/javascript; charset=utf-8" },
   "/styles.css": { file: "styles.css", type: "text/css; charset=utf-8" },
   "/favicon.svg": { file: "favicon.svg", type: "image/svg+xml" },
 };
@@ -130,6 +144,27 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
 
   const info = (): RemoteInfo => options.handler.info?.() ?? {};
   const currentPermission = (): RemotePermission | null => options.permissions?.current() ?? null;
+
+  const sessions = async (): Promise<RemoteSession[]> => {
+    if (options.handler.sessions === undefined) return [];
+    try {
+      return await options.handler.sessions();
+    } catch {
+      return [];
+    }
+  };
+
+  const sendSessions = async (client: WsConnection): Promise<void> => {
+    client.send(JSON.stringify({ type: "sessions", sessions: await sessions() }));
+  };
+
+  const history = (): unknown[] => {
+    try {
+      return options.handler.history?.() ?? [];
+    } catch {
+      return [];
+    }
+  };
 
   const server: Server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
@@ -231,8 +266,11 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         type: "hello",
         info: info(),
         permission: currentPermission(),
+        history: history(),
+        busy,
       }),
     );
+    void sendSessions(connection);
 
     connection.onClose(() => {
       clients.delete(connection);
@@ -258,6 +296,44 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         if (!resolved) {
           connection.send(JSON.stringify({ type: "error", message: "permission request is no longer pending" }));
         }
+        return;
+      }
+
+      if (message.type === "sessions") {
+        void sendSessions(connection);
+        return;
+      }
+
+      if (message.type === "resume" || message.type === "new") {
+        if (options.handler.resume === undefined) {
+          connection.send(JSON.stringify({ type: "error", message: "session switching is not available" }));
+          return;
+        }
+        if (busy) {
+          connection.send(JSON.stringify({ type: "error", message: "Stop the current turn first" }));
+          return;
+        }
+        busy = true;
+        void (async () => {
+          try {
+            const next =
+              (await options.handler.resume?.(message.type === "new" ? null : (message.id ?? null))) ??
+              info();
+            broadcast({
+              type: "session",
+              info: next,
+              history: history(),
+              permission: currentPermission(),
+            });
+            broadcast({ type: "sessions", sessions: await sessions() });
+          } catch (error) {
+            connection.send(
+              JSON.stringify({ type: "error", message: (error as Error).message || "could not switch session" }),
+            );
+          } finally {
+            busy = false;
+          }
+        })();
         return;
       }
 

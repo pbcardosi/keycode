@@ -15,6 +15,10 @@
           <span>keycode</span>
         </div>
         <div class="meta" id="meta"></div>
+        <div class="session-actions">
+          <button id="sessions-button" class="chip" type="button">Sessions</button>
+          <button id="new-session" class="chip" type="button">New</button>
+        </div>
         <div class="status" id="status" data-state="offline">offline</div>
       </header>
 
@@ -67,6 +71,16 @@
           <button type="button" data-choice="deny" class="danger">Deny</button>
           <button type="button" data-choice="cancel" class="ghost">Cancel</button>
         </div>
+      </div>
+    </div>
+
+    <div class="modal" id="session-modal" hidden>
+      <div class="dialog sessions" role="dialog" aria-modal="true" aria-labelledby="sessions-title">
+        <div class="dialog-head">
+          <h2 id="sessions-title">Sessions</h2>
+          <button type="button" id="sessions-close" class="ghost">Close</button>
+        </div>
+        <div class="session-list" id="session-list"></div>
       </div>
     </div>
 

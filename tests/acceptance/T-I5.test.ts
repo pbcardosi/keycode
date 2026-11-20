@@ -6,6 +6,14 @@ import {
 } from "../../dist/integrations/remote.js";
 import { connectWebSocket } from "../helpers.js";
 
+async function nextOfType(client: Awaited<ReturnType<typeof connectWebSocket>>, type: string) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const message = JSON.parse(await client.nextMessage()) as { type: string };
+    if (message.type === type) return message;
+  }
+  throw new Error(`did not receive a ${type} message`);
+}
+
 describe("T-I5: Remote Control", () => {
   it("binds loopback, streams a reply with the pairing token, and rejects a wrong token", async () => {
     let stopped = false;
@@ -54,6 +62,7 @@ describe("T-I5: Remote Control", () => {
       preview: "$ echo hi",
     };
     const resolved: Array<[string, string]> = [];
+    const resumed: Array<string | null> = [];
 
     const server = await startRemoteControl({
       token: "pair-token",
@@ -65,6 +74,39 @@ describe("T-I5: Remote Control", () => {
           sessionId: "12345678-0000-0000-0000-000000000000",
           permissionMode: "manual",
         }),
+        sessions: () => [
+          {
+            id: "12345678-0000-0000-0000-000000000000",
+            name: "current",
+            messageCount: 1,
+            createdAt: "2026-11-20T00:00:00.000Z",
+            provider: "fake",
+            model: "fake-model",
+          },
+          {
+            id: "aaaaaaaa-0000-0000-0000-000000000000",
+            name: "older",
+            messageCount: 3,
+            createdAt: "2026-11-19T00:00:00.000Z",
+            provider: "fake",
+            model: "fake-model",
+          },
+        ],
+        history: () => [
+          {
+            role: "assistant",
+            content: [{ type: "text", text: "previous answer" }],
+          },
+        ],
+        resume: (id) => {
+          resumed.push(id);
+          return {
+            provider: "fake",
+            model: "fake-model",
+            sessionId: id ?? "bbbbbbbb-0000-0000-0000-000000000000",
+            permissionMode: "manual",
+          };
+        },
         subscribe: (listener) => {
           emit = listener;
           return () => {
@@ -106,33 +148,56 @@ describe("T-I5: Remote Control", () => {
     const port = Number(new URL(server.url).port);
     const client = await connectWebSocket(port, "/?token=pair-token");
 
-    const hello = JSON.parse(await client.nextMessage()) as {
+    const hello = (await nextOfType(client, "hello")) as {
       type: string;
       info: { provider: string };
       permission: { id: string } | null;
+      history: unknown[];
     };
     expect(hello.type).toBe("hello");
     expect(hello.info.provider).toBe("fake");
     expect(hello.permission?.id).toBe("perm-1");
+    expect(hello.history).toHaveLength(1);
 
     client.send(JSON.stringify({ type: "permission", id: "perm-1", choice: "allow_once" }));
-    const cleared = JSON.parse(await client.nextMessage()) as { type: string; permission: unknown };
+    const cleared = (await nextOfType(client, "permission")) as { type: string; permission: unknown };
     expect(cleared).toEqual({ type: "permission", permission: null });
     expect(resolved).toEqual([["perm-1", "allow_once"]]);
 
     client.send(JSON.stringify({ type: "prompt", prompt: "hi" }));
-    const start = JSON.parse(await client.nextMessage()) as { type: string };
+    const start = await nextOfType(client, "turn_start");
     expect(start.type).toBe("turn_start");
-    const textEvent = JSON.parse(await client.nextMessage()) as {
+    const textEvent = (await nextOfType(client, "event")) as {
       type: string;
       event: { type: string; delta: string };
     };
     expect(textEvent.type).toBe("event");
     expect(textEvent.event).toMatchObject({ type: "text", delta: "reply hi" });
-    const done = JSON.parse(await client.nextMessage()) as { type: string; event: { type: string } };
+    const done = (await nextOfType(client, "event")) as { type: string; event: { type: string } };
     expect(done.event.type).toBe("done");
-    const turnDone = JSON.parse(await client.nextMessage()) as { type: string };
+    const turnDone = await nextOfType(client, "turn_done");
     expect(turnDone.type).toBe("turn_done");
+
+    client.send(JSON.stringify({ type: "sessions" }));
+    const list = (await nextOfType(client, "sessions")) as {
+      sessions: Array<{ id: string; messageCount: number }>;
+    };
+    expect(list.sessions).toHaveLength(2);
+    expect(list.sessions[1]).toMatchObject({ messageCount: 3 });
+
+    client.send(JSON.stringify({ type: "resume", id: "aaaaaaaa-0000-0000-0000-000000000000" }));
+    const switched = (await nextOfType(client, "session")) as {
+      info: { sessionId: string };
+      history: Array<{ role: string }>;
+    };
+    expect(switched.info.sessionId).toBe("aaaaaaaa-0000-0000-0000-000000000000");
+    expect(switched.history[0]?.role).toBe("assistant");
+    expect(resumed).toEqual(["aaaaaaaa-0000-0000-0000-000000000000"]);
+
+    client.send(JSON.stringify({ type: "new" }));
+    const created = (await nextOfType(client, "session")) as { info: { sessionId: string } };
+    expect(created.info.sessionId).toBe("bbbbbbbb-0000-0000-0000-000000000000");
+    expect(resumed).toEqual(["aaaaaaaa-0000-0000-0000-000000000000", null]);
 
     await expect(connectWebSocket(port, "/?token=wrong")).rejects.toThrow();
     client.close();

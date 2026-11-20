@@ -159,8 +159,10 @@ appears, paste either the token or the full printed URL.
 Open the printed URL. The interface supports:
 
 - streamed replies and tool rows,
+- Markdown rendering, fenced code blocks, and copy buttons,
 - edit and write diffs in the approval dialog,
 - allow once / always / session / deny / cancel,
+- session list, new session, and resume with history,
 - stop and reconnect,
 - pairing by token, with the server bound to loopback only.
 

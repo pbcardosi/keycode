@@ -405,14 +405,33 @@ export function registerExtraCommands(program: Command): void {
       const cmd = args[args.length - 1] as Command;
       const options = opts(cmd);
       const broker = new PermissionBroker();
-      const setup = await createAgentSetup({
+      const baseOptions = {
         cwd: process.cwd(),
-        provider: typeof options.provider === "string" ? options.provider : undefined,
-        model: typeof options.model === "string" ? options.model : undefined,
+        ...(typeof options.provider === "string" ? { provider: options.provider } : {}),
+        ...(typeof options.model === "string" ? { model: options.model } : {}),
         permissionMode: options.permissionMode as PermissionMode,
         prompter: broker,
-      });
+      };
+      const eventListeners = new Set<(event: unknown) => void>();
+      const dispatch = (event: unknown): void => {
+        for (const listener of eventListeners) listener(event);
+      };
+      let setup = await createAgentSetup(baseOptions);
+      let unsubscribeAgent = setup.agent.subscribe(dispatch);
       let controller = new AbortController();
+
+      const describe = (current: typeof setup): {
+        provider: string;
+        model: string;
+        sessionId: string;
+        permissionMode: PermissionMode;
+      } => ({
+        provider: current.providerId,
+        model: current.model,
+        sessionId: current.sessionId,
+        permissionMode: current.permissionMode,
+      });
+
       const remotePermission = (): {
         id: string;
         tool: string;
@@ -430,17 +449,18 @@ export function registerExtraCommands(program: Command): void {
           ...(pending.request.diff === undefined ? {} : { diff: pending.request.diff }),
         };
       };
+
       const server = await startRemoteControl({
         ...(typeof options.token === "string" ? { token: options.token } : {}),
         staticDir: defaultWebDir(),
         handler: {
-          info: () => ({
-            provider: setup.providerId,
-            model: setup.model,
-            sessionId: setup.sessionId,
-            permissionMode: setup.permissionMode,
-          }),
-          subscribe: (listener) => setup.agent.subscribe((event) => listener(event)),
+          info: () => describe(setup),
+          subscribe: (listener) => {
+            eventListeners.add(listener);
+            return () => {
+              eventListeners.delete(listener);
+            };
+          },
           onPrompt: async (prompt) => {
             const result = await setup.agent.runTurn(prompt, controller.signal);
             return result.text;
@@ -449,6 +469,32 @@ export function registerExtraCommands(program: Command): void {
             controller.abort();
             broker.cancelAll();
             controller = new AbortController();
+          },
+          sessions: () =>
+            setup.store.list().slice(0, 50).map((session) => ({
+              id: session.id,
+              name: session.name,
+              messageCount: session.messageCount,
+              createdAt: session.createdAt,
+              provider: session.provider,
+              model: session.model,
+              ...(session.parentId === undefined || session.parentId === null
+                ? {}
+                : { parentId: session.parentId }),
+            })),
+          history: () => setup.store.load(setup.sessionId).messages,
+          resume: async (id) => {
+            broker.cancelAll();
+            unsubscribeAgent();
+            controller.abort();
+            await Promise.all(setup.mcpClients.map((client) => client.close()));
+            setup = await createAgentSetup({
+              ...baseOptions,
+              ...(id === null ? {} : { resume: id }),
+            });
+            unsubscribeAgent = setup.agent.subscribe(dispatch);
+            controller = new AbortController();
+            return describe(setup);
           },
         },
         permissions: {
@@ -474,6 +520,8 @@ export function registerExtraCommands(program: Command): void {
       if (options.open === true) openBrowser(`${server.url}/#token=${server.token}`);
       keepAlive(async () => {
         broker.cancelAll();
+        unsubscribeAgent();
+        await Promise.all(setup.mcpClients.map((client) => client.close()));
         await server.close();
       });
     });

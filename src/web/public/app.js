@@ -1,3 +1,5 @@
+import { renderMarkdown } from "/markdown.js";
+
 const $ = (id) => document.getElementById(id);
 const transcript = $("transcript");
 const empty = $("empty");
@@ -14,6 +16,10 @@ const permissionTool = $("permission-tool");
 const permissionReason = $("permission-reason");
 const permissionPreview = $("permission-preview");
 const permissionDiff = $("permission-diff");
+const sessionModal = $("session-modal");
+const sessionList = $("session-list");
+const sessionsButton = $("sessions-button");
+const newSessionButton = $("new-session");
 
 let socket = null;
 let token = "";
@@ -21,8 +27,10 @@ let busy = false;
 let intentionalClose = false;
 let reconnectTimer = null;
 let failures = 0;
+let currentSessionId = "";
+let sessions = [];
 let currentAssistant = null;
-let usage = { input: 0, output: 0 };
+let renderTimer = null;
 const tools = new Map();
 
 function setStatus(text, state) {
@@ -43,24 +51,28 @@ function element(tag, className, text) {
 }
 
 function hideEmpty() {
-  if (empty && empty.parentElement) empty.remove();
+  empty.hidden = true;
 }
 
-function addMessage(role, text) {
+function addMessage(role, text, markdown = false) {
   hideEmpty();
   const wrap = element("div", `message ${role}`);
   wrap.appendChild(element("div", "who", role === "user" ? "you" : "keycode"));
-  const body = element("div", "body");
-  body.textContent = text;
+  const body = element("div", markdown ? "body markdown" : "body");
+  if (markdown) renderMarkdown(body, text);
+  else body.textContent = text;
   wrap.appendChild(body);
   transcript.appendChild(wrap);
   scrollIfNearBottom();
   return body;
 }
 
-function ensureAssistant() {
-  if (currentAssistant === null) currentAssistant = addMessage("assistant", "");
-  return currentAssistant;
+function textOf(content) {
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((block) => block !== null && typeof block === "object" && block.type === "text")
+    .map((block) => block.text ?? "")
+    .join("");
 }
 
 function toolDetail(input) {
@@ -76,30 +88,40 @@ function toolDetail(input) {
 
 function addToolRow(event) {
   hideEmpty();
+  const key = event.id ?? `${event.name}-${tools.size}`;
   const row = element("div", "tool");
   row.dataset.status = "pending";
   row.appendChild(element("span", "icon", "⚙"));
-  row.appendChild(element("span", "name", event.name));
+  row.appendChild(element("span", "name", event.name ?? "tool"));
   const detail = toolDetail(event.input);
   if (detail) row.appendChild(element("span", "detail", `· ${detail}`));
   row.appendChild(element("span", "outcome", "running"));
-  transcript.appendChild(row);
-  tools.set(event.id, row);
+  const output = element("pre", "tool-output");
+  output.hidden = true;
+  row.addEventListener("click", () => {
+    if (row.classList.contains("has-output")) output.hidden = !output.hidden;
+  });
+  transcript.append(row, output);
+  tools.set(key, { row, output });
   scrollIfNearBottom();
 }
 
 function finishToolRow(event) {
-  const row = tools.get(event.id);
-  if (!row) return;
-  row.dataset.status = event.ok ? "ok" : "error";
-  const outcome = row.querySelector(".outcome");
+  const entry = tools.get(event.id);
+  if (!entry) return;
+  entry.row.dataset.status = event.ok ? "ok" : "error";
+  const outcome = entry.row.querySelector(".outcome");
   if (outcome) outcome.textContent = event.ok ? "ok" : "error";
+  const text = typeof event.text === "string" ? event.text : "";
+  if (text.length > 0) {
+    entry.output.textContent = text.length > 4_000 ? `${text.slice(0, 4_000)}\n…` : text;
+    entry.row.classList.add("has-output");
+  }
 }
 
 function showError(message) {
   hideEmpty();
-  const banner = element("div", "error-banner", message);
-  transcript.appendChild(banner);
+  transcript.appendChild(element("div", "error-banner", message));
   scrollIfNearBottom();
 }
 
@@ -111,6 +133,7 @@ function renderMeta(info) {
   if (info.sessionId) parts.push(info.sessionId.slice(0, 8));
   if (info.permissionMode) parts.push(info.permissionMode);
   metaEl.textContent = parts.join(" · ");
+  currentSessionId = info.sessionId ?? currentSessionId;
 }
 
 function showPermission(permission) {
@@ -138,6 +161,32 @@ function resolvePermission(choice) {
   socket.send(JSON.stringify({ type: "permission", id, choice }));
 }
 
+function ensureAssistant() {
+  if (currentAssistant === null) {
+    currentAssistant = { body: addMessage("assistant", "", true), raw: "" };
+  }
+  return currentAssistant;
+}
+
+function scheduleRender() {
+  if (renderTimer !== null) return;
+  renderTimer = setTimeout(() => {
+    renderTimer = null;
+    if (currentAssistant) {
+      renderMarkdown(currentAssistant.body, currentAssistant.raw);
+      scrollIfNearBottom();
+    }
+  }, 60);
+}
+
+function flushAssistant() {
+  if (renderTimer !== null) {
+    clearTimeout(renderTimer);
+    renderTimer = null;
+  }
+  if (currentAssistant) renderMarkdown(currentAssistant.body, currentAssistant.raw);
+}
+
 function startTurn() {
   busy = true;
   sendButton.disabled = true;
@@ -147,6 +196,7 @@ function startTurn() {
 }
 
 function endTurn() {
+  flushAssistant();
   busy = false;
   sendButton.disabled = false;
   stopButton.disabled = true;
@@ -155,34 +205,59 @@ function endTurn() {
   input.focus();
 }
 
+function resetTranscript() {
+  if (renderTimer !== null) clearTimeout(renderTimer);
+  renderTimer = null;
+  currentAssistant = null;
+  tools.clear();
+  transcript.textContent = "";
+  transcript.appendChild(empty);
+  empty.hidden = false;
+}
+
+function renderHistory(messages) {
+  resetTranscript();
+  if (!Array.isArray(messages) || messages.length === 0) return;
+  for (const message of messages) {
+    if (message === null || typeof message !== "object" || !Array.isArray(message.content)) continue;
+    if (message.role === "user") {
+      const text = textOf(message.content);
+      if (text.trim().length > 0) addMessage("user", text);
+      for (const block of message.content) {
+        if (block?.type === "tool_result") {
+          finishToolRow({
+            id: block.toolCallId,
+            ok: block.ok === true,
+            text: textOf(block.content),
+          });
+        }
+      }
+    } else if (message.role === "assistant") {
+      const text = textOf(message.content);
+      if (text.trim().length > 0) addMessage("assistant", text, true);
+      for (const block of message.content) {
+        if (block?.type === "tool_call") addToolRow(block);
+      }
+    }
+  }
+}
+
 function handleEvent(event) {
   if (event === null || typeof event !== "object") return;
   switch (event.type) {
     case "text": {
-      const body = ensureAssistant();
-      body.textContent += event.delta ?? "";
-      scrollIfNearBottom();
+      const assistant = ensureAssistant();
+      assistant.raw += event.delta ?? "";
+      scheduleRender();
       break;
     }
-    case "thinking": {
-      hideEmpty();
-      let thinking = transcript.querySelector(".thinking:last-of-type");
-      if (!thinking) {
-        thinking = element("div", "thinking");
-        transcript.appendChild(thinking);
-      }
-      thinking.textContent += event.delta ?? "";
-      scrollIfNearBottom();
+    case "thinking":
       break;
-    }
     case "tool_start":
       addToolRow(event);
       break;
     case "tool_result":
       finishToolRow(event);
-      break;
-    case "usage":
-      usage = { input: event.inputTokens ?? 0, output: event.outputTokens ?? 0 };
       break;
     case "done":
       if (event.stopReason === "aborted") showError("Stopped.");
@@ -201,21 +276,69 @@ function handleEvent(event) {
   }
 }
 
+function renderSessionList() {
+  sessionList.textContent = "";
+  if (sessions.length === 0) {
+    sessionList.appendChild(element("p", "", "No sessions in this directory yet."));
+    return;
+  }
+  for (const session of sessions) {
+    const item = element("button", "session-item");
+    item.type = "button";
+    if (session.id === currentSessionId) item.classList.add("active");
+    item.appendChild(element("span", "name", session.name || session.id.slice(0, 8)));
+    const when = new Date(session.createdAt).toLocaleString();
+    item.appendChild(
+      element(
+        "span",
+        "sub",
+        `${session.provider}/${session.model} · ${session.messageCount} messages · ${when}`,
+      ),
+    );
+    item.addEventListener("click", () => {
+      sessionModal.hidden = true;
+      setStatus("switching", "busy");
+      if (socket !== null && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "resume", id: session.id }));
+      }
+    });
+    sessionList.appendChild(item);
+  }
+}
+
 function handleMessage(message) {
   switch (message.type) {
     case "hello":
       failures = 0;
       tokenModal.hidden = true;
       renderMeta(message.info);
+      renderHistory(message.history ?? []);
       showPermission(message.permission ?? null);
-      setStatus(busy ? "working" : "ready", busy ? "busy" : "ready");
+      if (message.busy === true) startTurn();
+      else setStatus("ready", "ready");
       break;
     case "event":
       handleEvent(message.event);
       break;
     case "permission":
-      if (message.permission) permissionModal.dataset.id = message.permission.id;
       showPermission(message.permission ?? null);
+      break;
+    case "sessions":
+      sessions = Array.isArray(message.sessions) ? message.sessions : [];
+      renderSessionList();
+      break;
+    case "session":
+      sessionModal.hidden = true;
+      permissionModal.hidden = true;
+      renderMeta(message.info);
+      resetTranscript();
+      renderHistory(message.history ?? []);
+      showPermission(message.permission ?? null);
+      busy = false;
+      sendButton.disabled = false;
+      stopButton.disabled = true;
+      setStatus("ready", "ready");
+      renderSessionList();
       break;
     case "turn_start":
       if (!busy) startTurn();
@@ -247,10 +370,7 @@ function connect() {
   const url = `${scheme}://${location.host}/?token=${encodeURIComponent(token)}`;
   socket = new WebSocket(url);
 
-  socket.addEventListener("open", () => {
-    setStatus("connected", "ready");
-  });
-
+  socket.addEventListener("open", () => setStatus("connected", "ready"));
   socket.addEventListener("message", (event) => {
     let message;
     try {
@@ -260,7 +380,6 @@ function connect() {
     }
     handleMessage(message);
   });
-
   socket.addEventListener("close", () => {
     if (intentionalClose) return;
     failures += 1;
@@ -274,10 +393,7 @@ function connect() {
     clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(connect, 1200);
   });
-
-  socket.addEventListener("error", () => {
-    socket.close();
-  });
+  socket.addEventListener("error", () => socket.close());
 }
 
 function sendPrompt() {
@@ -334,6 +450,30 @@ input.addEventListener("keydown", (event) => {
     event.preventDefault();
     sendPrompt();
   }
+});
+
+sessionsButton.addEventListener("click", () => {
+  sessionModal.hidden = false;
+  renderSessionList();
+  if (socket !== null && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "sessions" }));
+  }
+});
+
+newSessionButton.addEventListener("click", () => {
+  sessionModal.hidden = true;
+  setStatus("switching", "busy");
+  if (socket !== null && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "new" }));
+  }
+});
+
+$("sessions-close").addEventListener("click", () => {
+  sessionModal.hidden = true;
+});
+
+sessionModal.addEventListener("click", (event) => {
+  if (event.target === sessionModal) sessionModal.hidden = true;
 });
 
 permissionModal.addEventListener("click", (event) => {

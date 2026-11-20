@@ -35,6 +35,8 @@ First alpha.
 - Model guidance for free and local providers in the README.
 - Local web UI for `keycode remote`: streaming replies, tool rows, diffs,
   browser approvals, stop, and token pairing on loopback.
+- Web UI Markdown rendering with copyable code blocks, expandable tool output,
+  and a session list with new-session and resume-with-history.
 
 ### Known limitations
 
