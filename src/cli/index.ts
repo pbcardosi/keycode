@@ -51,7 +51,14 @@ interface CliOptions {
   safeMode?: boolean;
   bare?: boolean;
   allowedTool?: string[];
+  allow?: string[];
+  deny?: string[];
+  ask?: string[];
   axScreenReader?: boolean;
+}
+
+function collectRule(value: string, previous: string[]): string[] {
+  return [...previous, value];
 }
 
 function parseOutputFormat(value: string | undefined): OutputFormat {
@@ -113,6 +120,13 @@ function setupOptions(options: CliOptions): AgentSetupOptions {
     ...(options.safeMode === true ? { safeMode: true } : {}),
     ...(options.bare === true ? { bare: true } : {}),
     ...(options.allowedTool === undefined ? {} : { allowedTools: options.allowedTool }),
+    ...(options.allow === undefined || options.allow.length === 0
+      ? {}
+      : { allowRules: options.allow }),
+    ...(options.deny === undefined || options.deny.length === 0
+      ? {}
+      : { denyRules: options.deny }),
+    ...(options.ask === undefined || options.ask.length === 0 ? {} : { askRules: options.ask }),
   };
 }
 
@@ -143,6 +157,9 @@ program
   .option("--effort <level>", "low, medium, high, xhigh, or max")
   .option("--fallback-model <id>", "model to use when the primary fails")
   .option("--permission-mode <mode>", "manual, acceptEdits, plan, auto, dontAsk, or bypassPermissions")
+  .option("--allow <rule>", "allow rule, for example Bash(npm test) (repeatable)", collectRule, [] as string[])
+  .option("--deny <rule>", "deny rule (repeatable)", collectRule, [] as string[])
+  .option("--ask <rule>", "ask rule (repeatable)", collectRule, [] as string[])
   .option("--dangerously-skip-permissions", "alias for --permission-mode bypassPermissions")
   .option("--max-budget-usd <amount>", "stop before exceeding this spend")
   .option("--add-dir <dirs...>", "additional workspace directories")

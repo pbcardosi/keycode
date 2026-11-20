@@ -36,7 +36,9 @@ describe("T-S3: permission prompt", () => {
     const decision = await service.check({ tool: "Write", input: { file_path: "a.txt" }, cwd, readOnly: false });
     expect(prompts).toEqual(["Write"]);
     expect(decision.behavior).toBe("allow");
-    expect(persisted).toEqual(["Write"]);
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0]).toContain("Write(");
+    expect(persisted[0]).toContain("a.txt");
 
     const cancelService = new PermissionService({
       mode: "manual",
@@ -47,6 +49,20 @@ describe("T-S3: permission prompt", () => {
     await expect(
       cancelService.check({ tool: "Bash", input: { command: "echo hi" }, cwd, readOnly: false }),
     ).rejects.toMatchObject({ code: "ABORTED" });
+  });
+
+  it("denies with an actionable rule when no prompt is available", async () => {
+    const cwd = makeWorkspace();
+    const service = new PermissionService({ mode: "manual", cwd, roots: [cwd] });
+    const decision = await service.check({
+      tool: "Bash",
+      input: { command: "echo hi" },
+      cwd,
+      readOnly: false,
+    });
+    expect(decision.behavior).toBe("deny");
+    expect(decision.reason).toContain("--allow");
+    expect(decision.reason).toContain("Bash(echo hi)");
   });
 
   it("renders a TUI permission dialog and resolves allow-always", async () => {

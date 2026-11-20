@@ -34,11 +34,39 @@ export interface PermissionServiceOptions {
   managedDenyTools?: string[] | undefined;
   persistRule?: ((raw: string) => void) | undefined;
   trusted?: boolean | undefined;
+  onPromptUnavailable?: "deny" | "error" | undefined;
 }
 
 const EDIT_TOOLS = new Set(["Write", "Edit", "NotebookEdit", "MultiEdit"]);
 const COMMAND_TOOLS = new Set(["Bash", "PowerShell"]);
 const NETWORK_TOOLS = new Set(["WebFetch", "WebSearch"]);
+
+export function allowAlwaysRule(request: PermissionRequest): string {
+  const input = request.input;
+  const record =
+    input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {};
+  if (
+    (request.tool === "Bash" || request.tool === "PowerShell") &&
+    typeof record.command === "string"
+  ) {
+    return `${request.tool}(${record.command.trim()})`;
+  }
+  if (request.tool === "WebFetch" && typeof record.url === "string") {
+    try {
+      return `WebFetch(domain:${new URL(record.url).hostname})`;
+    } catch {
+      // Fall through to the tool-wide rule.
+    }
+  }
+  const path =
+    typeof record.file_path === "string"
+      ? record.file_path
+      : typeof record.path === "string"
+        ? record.path
+        : undefined;
+  if (path !== undefined) return `${request.tool}(${path})`;
+  return request.tool;
+}
 
 export function rulesFromPermissionSettings(
   permissions: PermissionSettings,
@@ -205,34 +233,43 @@ export class PermissionService implements PermissionGate {
     if (decision.behavior === "ask") {
       const prompter = this.options.prompter;
       if (!prompter) {
-        throw new KeycodeError(
-          "PERMISSION_PROMPT_UNAVAILABLE",
-          `${request.tool} needs approval, but no interactive channel is available. Add an allow rule or run interactively.`,
-        );
-      }
-      const choice = await prompter.ask(request, decision);
-      if (choice.behavior === "cancel") {
-        throw new KeycodeError("ABORTED", "Permission prompt cancelled");
-      }
-      if (choice.behavior === "deny") {
+        if (this.options.onPromptUnavailable === "error") {
+          throw new KeycodeError(
+            "PERMISSION_PROMPT_UNAVAILABLE",
+            `${request.tool} needs approval, but no interactive channel is available. Add an allow rule or run interactively.`,
+          );
+        }
         decision = {
           behavior: "deny",
-          reason: choice.note && choice.note.length > 0 ? choice.note : "Denied by user",
-          ...(decision.rule === undefined ? {} : { rule: decision.rule }),
-          source: "user",
+          reason: `${request.tool} needs approval, but no interactive channel is available. Add --allow "${allowAlwaysRule(request)}" or run interactively.`,
+          source: "mode",
         };
       } else {
-        decision = {
-          behavior: "allow",
-          reason: choice.behavior === "allow_once" ? "Allowed once by user" : "Allowed by user",
-          ...(decision.rule === undefined ? {} : { rule: decision.rule }),
-          source: "user",
-        };
-        if (choice.behavior === "allow_session") {
-          this.recordSessionAllow(request.tool, undefined);
-        } else if (choice.behavior === "allow_always") {
-          this.recordSessionAllow(request.tool, undefined);
-          this.options.persistRule?.(request.tool);
+        const choice = await prompter.ask(request, decision);
+        if (choice.behavior === "cancel") {
+          throw new KeycodeError("ABORTED", "Permission prompt cancelled");
+        }
+        if (choice.behavior === "deny") {
+          decision = {
+            behavior: "deny",
+            reason: choice.note && choice.note.length > 0 ? choice.note : "Denied by user",
+            ...(decision.rule === undefined ? {} : { rule: decision.rule }),
+            source: "user",
+          };
+        } else {
+          decision = {
+            behavior: "allow",
+            reason: choice.behavior === "allow_once" ? "Allowed once by user" : "Allowed by user",
+            ...(decision.rule === undefined ? {} : { rule: decision.rule }),
+            source: "user",
+          };
+          const raw = allowAlwaysRule(request);
+          if (choice.behavior === "allow_session") {
+            this.sessionRules.unshift(parseRule(raw, "session", "allow"));
+          } else if (choice.behavior === "allow_always") {
+            this.sessionRules.unshift(parseRule(raw, "session", "allow"));
+            this.options.persistRule?.(raw);
+          }
         }
       }
     }

@@ -161,6 +161,7 @@ export async function runHeadless(options: HeadlessOptions): Promise<HeadlessRes
     } else {
       writeLine({ type: "error", error: { code: keycode.code, message: keycode.userMessage } });
     }
+    await Promise.all(setup.mcpClients.map((client) => client.close()));
     return { setup, text: accumulated, usage, turns, exitCode: keycode.exitCode };
   }
 
@@ -192,6 +193,7 @@ export async function runHeadless(options: HeadlessOptions): Promise<HeadlessRes
     });
   }
 
+  await Promise.all(setup.mcpClients.map((client) => client.close()));
   return { setup, text: accumulated, usage, turns, exitCode: 0 };
 }
 
@@ -199,14 +201,24 @@ export async function runInteractive(
   factory: (prompter: PermissionPrompter) => Promise<AgentSetup>,
 ): Promise<number> {
   const permissions = new PermissionBroker();
-  const initial = await factory(permissions);
-  for (const warning of initial.warnings) process.stderr.write(`warning: ${warning}\n`);
+  let current = await factory(permissions);
+  for (const warning of current.warnings) process.stderr.write(`warning: ${warning}\n`);
+  const closeSetup = async (setup: AgentSetup): Promise<void> => {
+    await Promise.all(setup.mcpClients.map((client) => client.close()));
+  };
   const tui = runTui({
-    setup: initial,
+    setup: current,
     permissions,
     onClear: () => {
-      void factory(permissions).then((next) => tui.rerender(next));
+      void closeSetup(current)
+        .then(() => factory(permissions))
+        .then((next) => {
+          current = next;
+          tui.rerender(next);
+        });
     },
   });
-  return tui.waitUntilExit();
+  const code = await tui.waitUntilExit();
+  await closeSetup(current);
+  return code;
 }

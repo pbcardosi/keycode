@@ -41,7 +41,10 @@ import { BudgetGuard, type Pricing } from "../providers/budget.js";
 import { isTrusted } from "./trust.js";
 import { Agent } from "./agent.js";
 import type { Provider } from "../contracts/provider.js";
-import type { Question, QuestionResult } from "../contracts/tool.js";
+import type { Question, QuestionResult, Tool } from "../contracts/tool.js";
+import { McpClient } from "../mcp/client.js";
+import { createMcpTools } from "../mcp/tools.js";
+import type { McpServerSettings } from "../mcp/management.js";
 import type { AgentEvent } from "./agent.js";
 import { atomicWrite } from "../util/fsx.js";
 
@@ -81,6 +84,9 @@ export interface AgentSetupOptions {
   safeMode?: boolean | undefined;
   bare?: boolean | undefined;
   allowedTools?: string[] | undefined;
+  allowRules?: string[] | undefined;
+  denyRules?: string[] | undefined;
+  askRules?: string[] | undefined;
 }
 
 export interface AgentSetup {
@@ -102,6 +108,39 @@ export interface AgentSetup {
   styles: OutputStyle[];
   outputStyle: string;
   autoMemory: AutoMemoryStore;
+  mcpClients: McpClient[];
+}
+
+function parseMcpServerSettings(
+  raw: unknown,
+): Array<{ name: string; config: McpServerSettings }> {
+  if (raw === null || typeof raw !== "object") return [];
+  const result: Array<{ name: string; config: McpServerSettings }> = [];
+  for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (value === null || typeof value !== "object") continue;
+    const record = value as Record<string, unknown>;
+    if (record.enabled === false) continue;
+    const command = typeof record.command === "string" ? record.command : undefined;
+    const url = typeof record.url === "string" ? record.url : undefined;
+    if (!command && !url) continue;
+    const type =
+      record.type === "sse" || record.type === "http" || record.type === "stdio"
+        ? record.type
+        : url
+          ? "http"
+          : "stdio";
+    result.push({
+      name,
+      config: {
+        type,
+        ...(command === undefined ? {} : { command }),
+        ...(Array.isArray(record.args) ? { args: record.args.map(String) } : {}),
+        ...(url === undefined ? {} : { url }),
+        ...(typeof record.timeoutMs === "number" ? { timeoutMs: record.timeoutMs } : {}),
+      },
+    });
+  }
+  return result;
 }
 
 function displayProviderAuthError(): KeycodeError {
@@ -259,8 +298,25 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   const styles = discoverStyles({ cwd, home, trusted });
   const styleName = options.outputStyle ?? settings.outputStyle ?? "default";
   const activeStyle = findStyle(styles, styleName);
+
+  const mcpClients: McpClient[] = [];
+  const mcpTools: Tool[] = [];
+  for (const entry of parseMcpServerSettings(settings.mcpServers)) {
+    let client: McpClient | undefined;
+    try {
+      client = new McpClient(entry.name, { ...entry.config, cwd });
+      await client.connect();
+      const tools = await createMcpTools(client);
+      mcpClients.push(client);
+      mcpTools.push(...tools);
+    } catch (error) {
+      await client?.close();
+      warnings.push(`MCP ${entry.name}: ${(error as Error).message}`);
+    }
+  }
+
   let subagentRunner: SubagentRunner | undefined;
-  const baseTools = options.tools ?? createCoreTools();
+  const baseTools = [...(options.tools ?? createCoreTools()), ...mcpTools];
   const withExtensions = baseTools.some((tool) => tool.name === "Skill")
     ? baseTools
     : [...baseTools, createSkillTool(skills)];
@@ -331,7 +387,12 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
 
   const permissions = permissionSettings(settings);
   const mode = options.permissionMode ?? permissions.defaultMode;
-  const rules: PermissionRule[] = rulesFromPermissionSettings(permissions);
+  const rules: PermissionRule[] = [
+    ...rulesFromPermissionSettings(permissions),
+    ...(options.denyRules ?? []).map((raw) => parseRule(raw, "session", "deny")),
+    ...(options.askRules ?? []).map((raw) => parseRule(raw, "session", "ask")),
+    ...(options.allowRules ?? []).map((raw) => parseRule(raw, "session", "allow")),
+  ];
   const audit = new AuditLog(home);
   const permissionService = new PermissionService({
     mode,
@@ -344,6 +405,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     managedDenyTools: managedDeniedTools(home, env),
     persistRule: (raw) => persistAllowRule(cwd, raw),
     trusted,
+    onPromptUnavailable: "deny",
   });
 
   const checkpoints = new CheckpointStore(home, cwd, store);
@@ -483,6 +545,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     styles,
     outputStyle: activeStyle?.name ?? "default",
     autoMemory,
+    mcpClients,
   };
 }
 
