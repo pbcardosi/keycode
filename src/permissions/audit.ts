@@ -22,9 +22,11 @@ export const AUDIT_ROTATE_BYTES = 1_000_000;
 
 export class AuditLog {
   private readonly path: string;
+  private readonly maxBytes: number;
 
-  constructor(home: string) {
+  constructor(home: string, options: { maxBytes?: number } = {}) {
     this.path = join(logsDir(home), "audit.jsonl");
+    this.maxBytes = options.maxBytes ?? AUDIT_ROTATE_BYTES;
   }
 
   get file(): string {
@@ -34,7 +36,7 @@ export class AuditLog {
   append(entry: AuditEntry): void {
     const dir = join(this.path, "..");
     ensureDir(dir);
-    if (existsSync(this.path) && statSync(this.path).size >= AUDIT_ROTATE_BYTES) {
+    if (existsSync(this.path) && statSync(this.path).size >= this.maxBytes) {
       renameSync(this.path, `${this.path}.1`);
     }
     appendFileSync(this.path, `${JSON.stringify(redactDeep(entry))}\n`);
