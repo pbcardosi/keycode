@@ -5,7 +5,7 @@
 **Parity target:** Claude Code v2.1.322 (observed behavior; clean-room)
 **Runtime:** Node.js >= 22, ESM, TypeScript strict
 **License:** Apache-2.0
-**Status:** specification, no runtime code yet
+**Status:** specification; Part 1 runtime implemented and covered by 43 acceptance tests (`T-<ID>` per feature). Parts 2-3 are planned and documented in §12.
 
 ---
 
