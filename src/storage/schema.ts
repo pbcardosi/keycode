@@ -43,6 +43,15 @@ export const SandboxSchema = z
   })
   .passthrough();
 
+export const LspServerSchema = z
+  .object({
+    command: z.string().min(1),
+    args: z.array(z.string()).optional(),
+    language: z.string().optional(),
+    timeoutMs: z.number().int().positive().optional(),
+  })
+  .passthrough();
+
 export const SettingsSchema = z
   .object({
     $schema: z.string().optional(),
@@ -56,6 +65,7 @@ export const SettingsSchema = z
     hooks: z.record(z.string(), z.unknown()).optional(),
     mcpServers: z.record(z.string(), z.unknown()).optional(),
     sandbox: SandboxSchema.optional(),
+    lsp: z.record(z.string(), LspServerSchema).optional(),
     statusLine: z
       .union([z.string(), z.object({ type: z.string(), command: z.string() })])
       .nullable()

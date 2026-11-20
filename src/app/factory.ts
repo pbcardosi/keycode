@@ -39,6 +39,7 @@ import { createAgentTool } from "../tools/agent.js";
 import { narrowPermissionMode, type SubagentRunner } from "./subagent.js";
 import { buildSystemPrompt, promptHash, type SystemPromptOptions } from "../core/context.js";
 import { createCoreTools, toolSpecs } from "../tools/index.js";
+import { createLspTool } from "../tools/lsp.js";
 import { BudgetGuard, type Pricing } from "../providers/budget.js";
 import { isTrusted } from "./trust.js";
 import { Agent } from "./agent.js";
@@ -115,6 +116,7 @@ export interface AgentSetup {
   autoMemory: AutoMemoryStore;
   mcpClients: McpClient[];
   sandbox?: SandboxPolicy | undefined;
+  lsp?: ReturnType<typeof createLspTool> | undefined;
 }
 
 function parseMcpServerSettings(
@@ -322,12 +324,23 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   }
 
   let subagentRunner: SubagentRunner | undefined;
-  const baseTools = [...(options.tools ?? createCoreTools()), ...mcpTools];
+  const toolRoots = [cwd, ...(options.addDirs ?? []).map((dir) => resolve(cwd, dir))];
+  const lspServers =
+    options.bare === true || options.safeMode === true ? {} : (settings.lsp ?? {});
+  const lspTool =
+    Object.keys(lspServers).length > 0
+      ? createLspTool({ servers: lspServers, cwd, roots: toolRoots })
+      : undefined;
+  const baseTools = [
+    ...(options.tools ?? createCoreTools()),
+    ...(lspTool === undefined ? [] : [lspTool]),
+    ...mcpTools,
+  ];
   const withExtensions = baseTools.some((tool) => tool.name === "Skill")
     ? baseTools
     : [...baseTools, createSkillTool(skills)];
   const managedDenied = managedDeniedTools(home, env);
-  const restrictedDenied = new Set(["Bash", "PowerShell", "Agent", "WebFetch", "CodeMode"]);
+  const restrictedDenied = new Set(["Bash", "PowerShell", "Agent", "WebFetch", "CodeMode", "LSP"]);
   const allowedByFlag = options.allowedTools ?? [];
   const tools = [
     ...withExtensions,
@@ -347,7 +360,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     );
   const specs = toolSpecs(tools);
 
-  const roots = [cwd, ...(options.addDirs ?? []).map((dir) => resolve(cwd, dir))];
+  const roots = toolRoots;
   const sandboxSettings = trusted ? settings.sandbox : undefined;
   const sandboxEnabled = options.sandbox ?? sandboxSettings?.enabled ?? false;
   const sandbox = sandboxEnabled
@@ -568,6 +581,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     autoMemory,
     mcpClients,
     ...(sandbox === undefined ? {} : { sandbox }),
+    ...(lspTool === undefined ? {} : { lsp: lspTool }),
   };
 }
 

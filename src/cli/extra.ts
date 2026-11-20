@@ -446,6 +446,7 @@ export function registerExtraCommands(program: Command): void {
         broker.cancelAll();
         unsubscribeAgent();
         controller.abort();
+        setup.lsp?.stop();
         await Promise.all(setup.mcpClients.map((client) => client.close()));
         setup = await createAgentSetup(buildOptions(overrides));
         currentProvider = setup.providerId;
@@ -594,6 +595,7 @@ export function registerExtraCommands(program: Command): void {
       keepAlive(async () => {
         broker.cancelAll();
         unsubscribeAgent();
+        setup.lsp?.stop();
         await Promise.all(setup.mcpClients.map((client) => client.close()));
         await server.close();
       });

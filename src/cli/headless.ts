@@ -162,6 +162,7 @@ export async function runHeadless(options: HeadlessOptions): Promise<HeadlessRes
     } else {
       writeLine({ type: "error", error: { code: keycode.code, message: keycode.userMessage } });
     }
+    setup.lsp?.stop();
     await Promise.all(setup.mcpClients.map((client) => client.close()));
     return { setup, text: accumulated, usage, turns, exitCode: keycode.exitCode };
   }
@@ -205,6 +206,7 @@ export async function runInteractive(
   let current = await factory(permissions);
   for (const warning of current.warnings) process.stderr.write(`warning: ${warning}\n`);
   const closeSetup = async (setup: AgentSetup): Promise<void> => {
+    setup.lsp?.stop();
     await Promise.all(setup.mcpClients.map((client) => client.close()));
   };
   const tui = runTui({

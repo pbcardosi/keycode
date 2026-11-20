@@ -162,8 +162,17 @@ export class LspClient {
   }
 
   openDocument(uri: string, languageId: string, text: string): void {
+    this.diagnostics.delete(uri);
     this.notify("textDocument/didOpen", {
       textDocument: { uri, languageId, version: 1, text },
+    });
+  }
+
+  updateDocument(uri: string, text: string, version: number): void {
+    this.diagnostics.delete(uri);
+    this.notify("textDocument/didChange", {
+      textDocument: { uri, version },
+      contentChanges: [{ text }],
     });
   }
 

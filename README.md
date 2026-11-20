@@ -203,6 +203,32 @@ real server launch in a temp workspace.
 
 ---
 
+## Language servers
+
+When language servers are configured, the agent gets an `LSP` tool for
+diagnostics, hover, definition, and references:
+
+```json
+{
+  "lsp": {
+    "typescript": { "command": "typescript-language-server", "args": ["--stdio"] },
+    "python": { "command": "pyright-langserver", "args": ["--stdio"] }
+  }
+}
+```
+
+Servers are started on first use and keyed by language id. The tool resolves
+`.ts`, `.tsx`, `.js`, `.py`, `.rs`, `.go`, `.java`, `.c`, `.cpp`, `.json`,
+`.md`, `.css`, `.html`, `.sh`, and `.ps1`, and accepts a `"*"` fallback. Line
+and character inputs are 1-based. Requests time out; a failing server returns an
+error result instead of breaking the turn.
+
+keycode does not bundle language servers. Install them separately or point at
+an absolute path. `--bare` and `--safe-mode` skip LSP; `--restricted` removes the
+`LSP` tool.
+
+---
+
 ## Permissions
 
 Every tool call goes through one permission pipeline, including MCP tools.

@@ -44,6 +44,8 @@ First alpha.
 - VS Code editor context forwarding: active file and selection reach the web UI
   over the authenticated loopback endpoint and are prepended to prompts.
 - `vscode://keycode.keycode-vscode/open` deep link for the VS Code extension.
+- `LSP` agent tool for diagnostics, hover, definition, and references, configured
+  under `lsp` in settings and started on demand.
 
 ### Known limitations
 
