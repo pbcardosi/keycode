@@ -165,6 +165,7 @@ Open the printed URL. The interface supports:
 - multiple-choice `AskUserQuestion` dialogs with radio/checkbox options and free-form answers,
 - allow once / always / session / deny / cancel,
 - session list, new session, resume with history, rename, fork, and delete,
+- artifact panel with versioned HTML previews rendered inside the UI,
 - provider/model switching that keeps the current session,
 - editor context from the VS Code extension: active file and selection shown
   above the composer and attached to prompts; **Detach** clears it,

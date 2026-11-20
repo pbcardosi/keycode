@@ -68,6 +68,13 @@ export interface RemoteProvider {
   local: boolean;
 }
 
+export interface RemoteArtifact {
+  id: string;
+  name: string;
+  latestVersion: number;
+  createdAt: string;
+}
+
 export interface RemoteHandler {
   onPrompt(prompt: string): Promise<string>;
   onStop?: (() => void) | undefined;
@@ -87,6 +94,10 @@ export interface RemoteHandler {
     | ((id: string, name?: string | undefined) => Promise<RemoteInfo> | RemoteInfo)
     | undefined;
   deleteSession?: ((id: string) => Promise<void> | void) | undefined;
+  artifacts?: (() => Promise<RemoteArtifact[]> | RemoteArtifact[]) | undefined;
+  artifactPreview?:
+    | ((id: string, version?: number | undefined) => Promise<string | null> | string | null)
+    | undefined;
 }
 
 export interface RemoteServerOptions {
@@ -140,6 +151,7 @@ function securityHeaders(): Record<string, string> {
       "img-src 'self' data:",
       "style-src 'self'",
       "script-src 'self'",
+      "frame-src 'self' http://127.0.0.1:* http://localhost:*",
       "base-uri 'none'",
       "form-action 'none'",
       "frame-ancestors 'none'",
@@ -266,6 +278,19 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
 
   const sendCatalog = async (client: WsConnection): Promise<void> => {
     client.send(JSON.stringify({ type: "catalog", providers: await catalog() }));
+  };
+
+  const artifacts = async (): Promise<RemoteArtifact[]> => {
+    if (options.handler.artifacts === undefined) return [];
+    try {
+      return await options.handler.artifacts();
+    } catch {
+      return [];
+    }
+  };
+
+  const sendArtifacts = async (client: WsConnection): Promise<void> => {
+    client.send(JSON.stringify({ type: "artifacts", artifacts: await artifacts() }));
   };
 
   const history = (): unknown[] => {
@@ -428,6 +453,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
     );
     void sendSessions(connection);
     void sendCatalog(connection);
+    void sendArtifacts(connection);
 
     connection.onClose(() => {
       clients.delete(connection);
@@ -438,6 +464,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         type?: string;
         prompt?: string;
         id?: string;
+        version?: number;
         name?: string;
         provider?: string;
         model?: string;
@@ -555,6 +582,44 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
 
       if (message.type === "catalog") {
         void sendCatalog(connection);
+        return;
+      }
+
+      if (message.type === "artifacts") {
+        void sendArtifacts(connection);
+        return;
+      }
+
+      if (message.type === "artifact_preview" && message.id !== undefined) {
+        if (options.handler.artifactPreview === undefined) {
+          connection.send(JSON.stringify({ type: "error", message: "artifact previews are not available" }));
+          return;
+        }
+        void (async () => {
+          try {
+            const version =
+              typeof message.version === "number" && Number.isInteger(message.version)
+                ? message.version
+                : undefined;
+            const url =
+              (await options.handler.artifactPreview?.(message.id ?? "", version)) ?? null;
+            connection.send(
+              JSON.stringify({
+                type: "artifact_preview",
+                id: message.id,
+                ...(version === undefined ? {} : { version }),
+                url,
+              }),
+            );
+          } catch (error) {
+            connection.send(
+              JSON.stringify({
+                type: "error",
+                message: (error as Error).message || "artifact preview failed",
+              }),
+            );
+          }
+        })();
         return;
       }
 

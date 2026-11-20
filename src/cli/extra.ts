@@ -557,6 +557,9 @@ export function registerExtraCommands(program: Command): void {
                 : { parentId: session.parentId }),
             })),
           history: () => setup.store.load(setup.sessionId).messages,
+          artifacts: () => setup.artifacts?.list() ?? [],
+          artifactPreview: async (id, version) =>
+            (await setup.artifacts?.preview(id, version)) ?? null,
           resume: async (id) => {
             if (id === null) return activate({});
             const meta = setup.store.resolve(id);

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Tool, ToolContext, ToolResult } from "../contracts/tool.js";
 import { toolError, toolOk } from "../contracts/tool.js";
-import { ArtifactStore, startPreview, type PreviewServer } from "../artifacts/store.js";
+import { ArtifactStore, startPreview, type ArtifactSummary, type PreviewServer } from "../artifacts/store.js";
 import { newId } from "../util/ids.js";
 import { KeycodeError } from "../util/errors.js";
 
@@ -34,7 +34,11 @@ function htmlError(html: string): string | null {
 
 export function createArtifactTool(
   options: ArtifactToolOptions,
-): Tool<ArtifactInputType> & { stop(): void } {
+): Tool<ArtifactInputType> & {
+  stop(): void;
+  list(): ArtifactSummary[];
+  preview(id: string, version?: number): Promise<string | null>;
+} {
   let preview: PreviewServer | null = null;
   let previewToken = "";
 
@@ -59,6 +63,14 @@ export function createArtifactTool(
         void preview.close();
         preview = null;
       }
+    },
+    list(): ArtifactSummary[] {
+      return options.store.list();
+    },
+    async preview(id: string, version?: number): Promise<string | null> {
+      const artifact = options.store.get(id, version);
+      if (!artifact) return null;
+      return await previewFor(id, artifact.version);
     },
     async execute(input: ArtifactInputType, _ctx: ToolContext): Promise<ToolResult> {
       try {

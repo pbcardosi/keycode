@@ -25,6 +25,10 @@ const trustBar = $("trust-bar");
 const trustLabel = $("trust-label");
 const trustModal = $("trust-modal");
 const trustItems = $("trust-items");
+const artifactModal = $("artifact-modal");
+const artifactList = $("artifact-list");
+const artifactFrame = $("artifact-frame");
+const artifactPlaceholder = $("artifact-placeholder");
 const sessionModal = $("session-modal");
 const sessionList = $("session-list");
 const sessionsButton = $("sessions-button");
@@ -55,6 +59,8 @@ let sessions = [];
 let pendingSessionAction = null;
 let currentQuestion = null;
 let trustState = null;
+let artifacts = [];
+let activeArtifactId = null;
 let currentAssistant = null;
 let renderTimer = null;
 const tools = new Map();
@@ -320,6 +326,58 @@ function sendTrust(accept) {
   send({ type: "trust", accept });
 }
 
+function renderArtifactList() {
+  artifactList.textContent = "";
+  if (artifacts.length === 0) {
+    artifactList.appendChild(
+      element("p", "hint", "No artifacts yet. Ask KeyCode to create one."),
+    );
+    return;
+  }
+  for (const artifact of artifacts) {
+    const item = element("button", "artifact-item");
+    item.type = "button";
+    if (artifact.id === activeArtifactId) item.classList.add("active");
+    item.appendChild(element("span", "name", artifact.name || artifact.id));
+    item.appendChild(
+      element(
+        "span",
+        "sub",
+        `${artifact.id} · v${artifact.latestVersion} · ${new Date(artifact.createdAt).toLocaleString()}`,
+      ),
+    );
+    item.addEventListener("click", () => {
+      activeArtifactId = artifact.id;
+      renderArtifactList();
+      artifactFrame.hidden = true;
+      artifactFrame.src = "about:blank";
+      artifactPlaceholder.hidden = false;
+      artifactPlaceholder.textContent = "Loading preview…";
+      send({ type: "artifact_preview", id: artifact.id });
+    });
+    artifactList.appendChild(item);
+  }
+}
+
+function openArtifacts() {
+  artifactModal.hidden = false;
+  renderArtifactList();
+  send({ type: "artifacts" });
+}
+
+function showArtifactPreview(message) {
+  if (message.id !== activeArtifactId) return;
+  if (typeof message.url === "string" && message.url.length > 0) {
+    artifactFrame.src = message.url;
+    artifactFrame.hidden = false;
+    artifactPlaceholder.hidden = true;
+  } else {
+    artifactFrame.hidden = true;
+    artifactPlaceholder.hidden = false;
+    artifactPlaceholder.textContent = "Preview unavailable.";
+  }
+}
+
 function ensureAssistant() {
   if (currentAssistant === null) {
     currentAssistant = { body: addMessage("assistant", "", true), raw: "" };
@@ -555,6 +613,13 @@ function handleMessage(message) {
     case "trust":
       applyTrust(message.trust ?? null);
       break;
+    case "artifacts":
+      artifacts = Array.isArray(message.artifacts) ? message.artifacts : [];
+      renderArtifactList();
+      break;
+    case "artifact_preview":
+      showArtifactPreview(message);
+      break;
     case "busy":
       applyBusy(message.busy === true);
       break;
@@ -743,6 +808,21 @@ $("context-clear").addEventListener("click", () => {
 });
 
 $("trust-review").addEventListener("click", openTrustReview);
+
+$("artifacts-button").addEventListener("click", openArtifacts);
+
+$("artifacts-close").addEventListener("click", () => {
+  artifactModal.hidden = true;
+});
+
+$("artifacts-refresh").addEventListener("click", () => {
+  renderArtifactList();
+  send({ type: "artifacts" });
+});
+
+artifactModal.addEventListener("click", (event) => {
+  if (event.target === artifactModal) artifactModal.hidden = true;
+});
 
 $("trust-accept").addEventListener("click", () => {
   sendTrust(true);

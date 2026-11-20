@@ -420,6 +420,43 @@ describe("T-I5: Remote Control", () => {
     await server.close();
   });
 
+  it("lists artifacts and returns tokenized previews", async () => {
+    const server = await startRemoteControl({
+      token: "pair-token",
+      handler: {
+        onPrompt: async () => "ok",
+        artifacts: () => [
+          {
+            id: "artifact_1",
+            name: "report",
+            latestVersion: 2,
+            createdAt: "2026-11-20T00:00:00.000Z",
+          },
+        ],
+        artifactPreview: (id, version) =>
+          `http://127.0.0.1:9999/artifacts/${id}/${version ?? 2}?token=t`,
+      },
+    });
+
+    const port = Number(new URL(server.url).port);
+    const client = await connectWebSocket(port, "/?token=pair-token");
+    const list = (await nextOfType(client, "artifacts")) as {
+      artifacts: Array<{ id: string; latestVersion: number }>;
+    };
+    expect(list.artifacts[0]).toMatchObject({ id: "artifact_1", latestVersion: 2 });
+
+    client.send(JSON.stringify({ type: "artifact_preview", id: "artifact_1", version: 2 }));
+    const preview = (await nextOfType(client, "artifact_preview")) as {
+      id: string;
+      url: string;
+    };
+    expect(preview.id).toBe("artifact_1");
+    expect(preview.url).toContain("token=t");
+
+    client.close();
+    await server.close();
+  });
+
   it("reviews project trust and applies it over WebSocket", async () => {
     let accepted: boolean | null = null;
     const state = {

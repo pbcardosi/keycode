@@ -5,6 +5,15 @@ import { makeHome } from "../helpers.js";
 
 const sleep = (ms: number): Promise<void> => new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
 
+async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return;
+    await sleep(50);
+  }
+  throw new Error("condition timed out");
+}
+
 describe("T-I7: background sessions", () => {
   it("starts, lists, logs, stops, detects a crash, respawns, and removes", async () => {
     const dir = join(makeHome(), "background");
@@ -18,7 +27,7 @@ describe("T-I7: background sessions", () => {
       cwd: dir,
     });
     expect(manager.list().some((entry) => entry.id === record.id && entry.status === "running")).toBe(true);
-    await sleep(500);
+    await waitFor(() => manager.logs(record.id).includes("ready"));
     expect(manager.logs(record.id)).toContain("ready");
     manager.stop(record.id);
     expect(manager.attach(record.id).status).toBe("stopped");
@@ -29,9 +38,13 @@ describe("T-I7: background sessions", () => {
       args: ["-e", script],
       cwd: dir,
     });
-    await sleep(300);
-    if (crash.pid !== null) process.kill(crash.pid, "SIGKILL");
-    await sleep(300);
+    await waitFor(() => {
+      const current = manager.attach(crash.id);
+      return current.pid !== null || current.status === "crashed";
+    });
+    const current = manager.attach(crash.id);
+    if (current.pid !== null) process.kill(current.pid, "SIGKILL");
+    await waitFor(() => manager.attach(crash.id).status === "crashed");
     expect(manager.attach(crash.id).status).toBe("crashed");
 
     const respawned = manager.respawn(crash.id);
