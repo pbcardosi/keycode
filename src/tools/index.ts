@@ -7,6 +7,9 @@ import { createGlobTool } from "./glob.js";
 import { createGrepTool } from "./grep.js";
 import { createTodoTool } from "./todo.js";
 import { createQuestionTool } from "./question.js";
+import { createWebFetchTool } from "./webfetch.js";
+import { createWebSearchTool } from "./websearch.js";
+import { createNotebookEditTool } from "./notebook.js";
 import type { Tool } from "../contracts/tool.js";
 import type { ToolSpec } from "../contracts/provider.js";
 import { z } from "zod";
@@ -22,6 +25,9 @@ export function createCoreTools(): Tool[] {
     createGrepTool(),
     createTodoTool(),
     createQuestionTool(),
+    createWebFetchTool(),
+    createWebSearchTool({ provider: null }),
+    createNotebookEditTool(),
   ];
 }
 
