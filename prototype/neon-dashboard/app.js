@@ -82,7 +82,6 @@ const dom = {
   sessionState: document.getElementById("session-state"),
   title: document.getElementById("session-title"),
   sub: document.getElementById("session-sub"),
-  lastEvent: document.getElementById("last-event"),
   duration: document.getElementById("duration"),
   tools: document.getElementById("stat-tools"),
   files: document.getElementById("stat-files"),
@@ -277,14 +276,6 @@ function updateStats() {
 }
 
 function updateClock() {
-  const newest = state.events.at(-1);
-  if (!newest) {
-    dom.lastEvent.textContent = "no events";
-  } else {
-    const seconds = Math.max(0, Math.round((Date.now() - newest.wall.getTime()) / 1000));
-    dom.lastEvent.textContent = seconds < 5 ? "just now" : `${seconds}s ago`;
-  }
-
   const minutes = Math.max(0, Math.floor((Date.now() - state.sessionStart) / 60_000));
   dom.duration.textContent =
     minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
@@ -308,6 +299,8 @@ function draw(now) {
   if (ctx === null || canvasSize.width === 0 || canvasSize.height === 0) return;
   const width = canvasSize.width;
   const height = canvasSize.height;
+  const compact = Math.min(1, height / lanes.length / 36);
+  const scale = 0.55 + 0.45 * compact;
 
   ctx.clearRect(0, 0, width, height);
 
@@ -345,7 +338,7 @@ function draw(now) {
   for (let lane = 0; lane < lanes.length; lane += 1) {
     const baseY = laneY(lane);
     for (let strand = 0; strand < 4; strand += 1) {
-      const amplitude = 4 + strand * 3.2 + (lane % 2) * 2;
+      const amplitude = (4 + strand * 3.2 + (lane % 2) * 2) * scale;
       const phase = now / (6_000 + strand * 1_700) + lane * 0.9 + strand * 2.2;
       ctx.beginPath();
       for (let x = 0; x <= width; x += 8) {
@@ -413,7 +406,7 @@ function draw(now) {
       ctx.shadowBlur = 14;
     }
     ctx.beginPath();
-    ctx.arc(x, y, recent ? 3.2 : 2.2, 0, Math.PI * 2);
+    ctx.arc(x, y, recent ? Math.max(2, 3.2 * scale) : Math.max(1.4, 2.2 * scale), 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
@@ -422,7 +415,7 @@ function draw(now) {
       ctx.strokeStyle = color;
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.arc(x, y, 5 + age / 400, 0, Math.PI * 2);
+      ctx.arc(x, y, 4 + age / 500, 0, Math.PI * 2);
       ctx.stroke();
     }
   }

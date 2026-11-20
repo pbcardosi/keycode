@@ -254,18 +254,12 @@
             <span>30s</span>
             <span>now</span>
           </div>
-
-          <footer class="panel-foot">
-            <span>Last event <span class="mono" id="last-event">just now</span></span>
-            <span>Sample activity</span>
-          </footer>
         </section>
 
         <section class="panel stream" aria-labelledby="stream-title">
           <header class="panel-head">
             <div class="panel-heading">
               <h2 id="stream-title">Event stream</h2>
-              <p>Tool calls, approvals, and errors from this session.</p>
             </div>
             <div class="panel-tools stream-tools">
               <div class="segmented" role="group" aria-label="Filter events">
@@ -323,27 +317,58 @@
           </footer>
         </section>
 
-        <footer class="composer">
-          <form class="composer-box" id="composer" novalidate>
-            <label class="visually-hidden" for="prompt">Prompt</label>
-            <div class="composer-input">
-              <svg class="icon icon-sm" aria-hidden="true"><use href="#i-shell" /></svg>
-              <textarea
-                id="prompt"
-                rows="1"
-                placeholder="Ask KeyCode to inspect, edit, or run something"
-                aria-describedby="composer-hint"
-                spellcheck="false"
-              ></textarea>
-              <button class="btn btn-primary btn-icon" id="send" type="submit" disabled aria-label="Send prompt">
-                <svg class="icon" aria-hidden="true"><use href="#i-send" /></svg>
-              </button>
+        <section class="panel chat" aria-labelledby="chat-title">
+          <header class="panel-head">
+            <div class="panel-heading">
+              <h2 id="chat-title">Chat</h2>
+              <p>Conversation from this session.</p>
             </div>
-            <p class="composer-hint" id="composer-hint">
-              Preview only. Sending is disabled until a server is connected.
-            </p>
-          </form>
-        </footer>
+            <span class="chip">gemma4:e2b</span>
+          </header>
+
+          <div class="chat-body" id="chat-body">
+            <article class="message message-user">
+              <p class="message-meta">
+                <span class="message-author">You</span>
+                <time datetime="2026-11-20T14:59">14:59</time>
+              </p>
+              <p class="message-text">
+                Give the execution field and event stream half the height. Let the chat take the rest.
+              </p>
+            </article>
+            <article class="message message-assistant">
+              <p class="message-meta">
+                <span class="message-author">KeyCode</span>
+                <time datetime="2026-11-20T15:00">15:00</time>
+              </p>
+              <p class="message-text">
+                Both panels are now half height. The transcript takes the remaining space, and the composer stays pinned below it.
+              </p>
+            </article>
+          </div>
+
+          <footer class="composer">
+            <form class="composer-box" id="composer" novalidate>
+              <label class="visually-hidden" for="prompt">Prompt</label>
+              <div class="composer-input">
+                <svg class="icon icon-sm" aria-hidden="true"><use href="#i-shell" /></svg>
+                <textarea
+                  id="prompt"
+                  rows="1"
+                  placeholder="Ask KeyCode to inspect, edit, or run something"
+                  aria-describedby="composer-hint"
+                  spellcheck="false"
+                ></textarea>
+                <button class="btn btn-primary btn-icon" id="send" type="submit" disabled aria-label="Send prompt">
+                  <svg class="icon" aria-hidden="true"><use href="#i-send" /></svg>
+                </button>
+              </div>
+              <p class="composer-hint" id="composer-hint">
+                Preview only. Sending is disabled until a server is connected.
+              </p>
+            </form>
+          </footer>
+        </section>
       </main>
 
       <aside class="side" aria-label="Session details">
