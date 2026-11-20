@@ -129,7 +129,7 @@ export function createBashTool(): Tool<BashInputType> {
           cwd: ctx.cwd,
           env: { ...process.env, ...input.env },
           shell: true,
-          detached: true,
+          detached: false,
           windowsHide: true,
           stdio: ["ignore", fd, fd],
         });

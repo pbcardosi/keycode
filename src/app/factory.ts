@@ -69,6 +69,10 @@ export interface AgentSetupOptions {
   autoCompactThreshold?: number | undefined;
   hooks?: HookConfig | undefined;
   outputStyle?: string | undefined;
+  restricted?: boolean | undefined;
+  safeMode?: boolean | undefined;
+  bare?: boolean | undefined;
+  allowedTools?: string[] | undefined;
 }
 
 export interface AgentSetup {
@@ -235,8 +239,9 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   }
 
   const view = store.load(sessionId);
-  const skills = discoverSkills({ cwd, home, trusted });
-  const agentDefinitions = discoverAgents({ cwd, home, trusted });
+  const allowCustomizations = options.safeMode !== true;
+  const skills = allowCustomizations ? discoverSkills({ cwd, home, trusted }) : [];
+  const agentDefinitions = allowCustomizations ? discoverAgents({ cwd, home, trusted }) : [];
   const styles = discoverStyles({ cwd, home, trusted });
   const styleName = options.outputStyle ?? settings.outputStyle ?? "default";
   const activeStyle = findStyle(styles, styleName);
@@ -245,6 +250,9 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   const withExtensions = baseTools.some((tool) => tool.name === "Skill")
     ? baseTools
     : [...baseTools, createSkillTool(skills)];
+  const managedDenied = managedDeniedTools(home, env);
+  const restrictedDenied = new Set(["Bash", "PowerShell", "Agent", "WebFetch"]);
+  const allowedByFlag = options.allowedTools ?? [];
   const tools = [
     ...withExtensions,
     createAgentTool(agentDefinitions, async (spec, ctx) => {
@@ -253,12 +261,23 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
       }
       return subagentRunner(spec, ctx);
     }),
-  ].filter((tool) => !managedDeniedTools(home, env).includes(tool.name));
+  ]
+    .filter((tool) => !managedDenied.includes(tool.name))
+    .filter(
+      (tool) =>
+        options.restricted !== true ||
+        !restrictedDenied.has(tool.name) ||
+        allowedByFlag.includes(tool.name),
+    );
   const specs = toolSpecs(tools);
 
   const roots = [cwd, ...(options.addDirs ?? []).map((dir) => resolve(cwd, dir))];
-  const commands = discoverCommands({ cwd, home, trusted });
-  const memory = loadMemory({ cwd, home, ...(options.noMemory === true ? { noMemory: true } : {}) });
+  const commands = allowCustomizations ? discoverCommands({ cwd, home, trusted }) : [];
+  const memory = loadMemory({
+    cwd,
+    home,
+    ...(options.noMemory === true || options.bare === true ? { noMemory: true } : {}),
+  });
   warnings.push(...memory.warnings);
 
   const promptOptions: SystemPromptOptions = {
@@ -299,7 +318,10 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   });
 
   const checkpoints = new CheckpointStore(home, cwd, store);
-  const hookConfig = options.hooks ?? (trusted ? parseHookConfig(settings.hooks) : {});
+  const hookConfig =
+    options.bare === true || options.safeMode === true
+      ? {}
+      : (options.hooks ?? (trusted ? parseHookConfig(settings.hooks) : {}));
   const hooks =
     Object.keys(hookConfig).length > 0
       ? new CommandHookDispatcher(hookConfig, { cwd, home, env })

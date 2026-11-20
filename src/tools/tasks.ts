@@ -15,6 +15,7 @@ export const TaskInput = z.object({
   status: z.enum(["running", "stopped", "completed", "failed"]).optional(),
   note: z.string().optional(),
   limit: z.number().int().positive().max(100_000).optional(),
+  cwd: z.string().optional(),
 });
 
 export type TaskInputType = z.infer<typeof TaskInput>;
@@ -86,7 +87,7 @@ export function createTaskTool(): Tool<TaskInputType> {
           cwd: input.cwd ?? ctx.cwd,
           env: process.env,
           shell: true,
-          detached: true,
+          detached: false,
           windowsHide: true,
           stdio: ["ignore", fd, fd],
         });
