@@ -106,6 +106,11 @@ Or in `settings.json`:
 }
 ```
 
+The JSON above belongs in a settings file, not in a PowerShell prompt:
+`~/.keycode/settings.json` (all projects), `.keycode/settings.json` (project),
+or `.keycode/settings.local.json` (local). Project layers only apply when the
+workspace is trusted.
+
 Enforcement:
 
 - **macOS:** wraps commands with `/usr/bin/sandbox-exec` and a Seatbelt profile

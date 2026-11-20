@@ -348,12 +348,13 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   const specs = toolSpecs(tools);
 
   const roots = [cwd, ...(options.addDirs ?? []).map((dir) => resolve(cwd, dir))];
-  const sandboxEnabled = options.sandbox ?? settings.sandbox?.enabled ?? false;
+  const sandboxSettings = trusted ? settings.sandbox : undefined;
+  const sandboxEnabled = options.sandbox ?? sandboxSettings?.enabled ?? false;
   const sandbox = sandboxEnabled
     ? createSandboxPolicy({
         roots,
-        allowNetwork: options.sandboxNetwork ?? settings.sandbox?.allowNetwork ?? false,
-        allowedHosts: options.sandboxAllowedHosts ?? settings.sandbox?.allowedHosts ?? [],
+        allowNetwork: options.sandboxNetwork ?? sandboxSettings?.allowNetwork ?? false,
+        allowedHosts: options.sandboxAllowedHosts ?? sandboxSettings?.allowedHosts ?? [],
       })
     : undefined;
   if (sandbox !== undefined) {

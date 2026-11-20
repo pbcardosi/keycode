@@ -8,8 +8,15 @@ import {
   sandboxFallbackWarning,
 } from "../../dist/sandbox/index.js";
 import { bwrapArgs, checkCommand, detectWrapper, seatbeltProfile } from "../../dist/sandbox/command.js";
+import { createAgentSetup } from "../../dist/app/factory.js";
 import { createBashTool } from "../../dist/tools/bash.js";
-import { makeHome, makeToolCtx, makeWorkspace, textOf } from "../helpers.js";
+import {
+  makeHome,
+  makeToolCtx,
+  makeWorkspace,
+  textOf,
+  writeJson,
+} from "../helpers.js";
 
 describe("T-S5: sandbox", () => {
   it("restricts writes to roots and blocks network egress by default", () => {
@@ -80,5 +87,32 @@ describe("T-S5: sandbox", () => {
     expect(detectWrapper("darwin", () => true)?.kind).toBe("seatbelt");
     expect(detectWrapper("linux", () => true)?.kind).toBe("bwrap");
     expect(detectWrapper("win32", () => true)).toBeNull();
+  });
+
+  it("ignores project sandbox settings in an untrusted workspace", async () => {
+    const home = makeHome();
+    const ws = makeWorkspace();
+    writeJson(join(ws, ".keycode", "settings.json"), {
+      sandbox: { enabled: true, allowNetwork: true },
+    });
+    const setup = await createAgentSetup({
+      cwd: ws,
+      home,
+      provider: "fake",
+      trust: false,
+      env: {
+        ...process.env,
+        KEYCODE_HOME: home,
+        KEYCODE_PROVIDER: "fake",
+        KEYCODE_FAKE_SCRIPT: JSON.stringify({
+          turns: [[{ type: "text", delta: "ok" }, { type: "done", stopReason: "end_turn" }]],
+        }),
+      },
+    });
+    try {
+      expect(setup.sandbox).toBeUndefined();
+    } finally {
+      await Promise.all(setup.mcpClients.map((client) => client.close()));
+    }
   });
 });
