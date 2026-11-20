@@ -162,7 +162,8 @@ Open the printed URL. The interface supports:
 - Markdown rendering, fenced code blocks, and copy buttons,
 - edit and write diffs in the approval dialog,
 - allow once / always / session / deny / cancel,
-- session list, new session, and resume with history,
+- session list, new session, resume with history, rename, fork, and delete,
+- provider/model switching that keeps the current session,
 - stop and reconnect,
 - pairing by token, with the server bound to loopback only.
 

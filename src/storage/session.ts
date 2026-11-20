@@ -5,6 +5,7 @@ import {
   openSync,
   readFileSync,
   readdirSync,
+  rmSync,
   statSync,
   writeSync,
 } from "node:fs";
@@ -13,6 +14,7 @@ import type {
   CheckpointRecord,
   ContextRecord,
   MessageRecord,
+  ModelChangeRecord,
   RenameRecord,
   RewindRecord,
   SessionHeader,
@@ -218,6 +220,22 @@ export class SessionStore {
     this.appendRecord(record, sessionId);
   }
 
+  setModel(sessionId: string, provider: string, model: string): void {
+    const record: ModelChangeRecord = {
+      type: "model",
+      provider,
+      model,
+      timestamp: new Date().toISOString(),
+    };
+    this.appendRecord(record, sessionId);
+  }
+
+  delete(sessionId: string): void {
+    this.load(sessionId);
+    if (this.activeId === sessionId) this.activeId = null;
+    rmSync(this.fileFor(sessionId), { force: true });
+  }
+
   header(sessionId?: string): SessionHeader {
     const id = sessionId ?? this.activeId;
     if (!id) throw new KeycodeError("CONFIG_INVALID", "A session is required");
@@ -237,6 +255,8 @@ export class SessionStore {
     }
     const header = headerRecord as SessionHeader;
     let name = header.name ?? "";
+    let provider = header.provider;
+    let model = header.model;
     let systemPrompt: string | null = null;
     let messages: Message[] = [];
     let todos: SessionView["todos"] = [];
@@ -248,6 +268,9 @@ export class SessionStore {
         messages.push(toMessage(record as MessageRecord));
       } else if (record.type === "rename") {
         name = (record as RenameRecord).name;
+      } else if (record.type === "model") {
+        provider = (record as ModelChangeRecord).provider;
+        model = (record as ModelChangeRecord).model;
       } else if (record.type === "checkpoint") {
         checkpoints.push(record as CheckpointRecord);
       } else if (record.type === "summary") {
@@ -262,7 +285,7 @@ export class SessionStore {
     }
 
     return {
-      header,
+      header: provider === header.provider && model === header.model ? header : { ...header, provider, model },
       records,
       messages,
       name: name.length > 0 ? name : header.id.slice(0, 8),
@@ -286,16 +309,22 @@ export class SessionStore {
         if (!header || header.type !== "session") continue;
         let name = header.name ?? header.id.slice(0, 8);
         let messageCount = 0;
+        let provider = header.provider;
+        let model = header.model;
         for (const record of records.slice(1)) {
           if (record.type === "message") messageCount += 1;
           if (record.type === "rename") name = (record as RenameRecord).name;
+          if (record.type === "model") {
+            provider = (record as ModelChangeRecord).provider;
+            model = (record as ModelChangeRecord).model;
+          }
         }
         result.push({
           id: header.id,
           name,
           cwd: header.cwd,
-          provider: header.provider,
-          model: header.model,
+          provider,
+          model,
           createdAt: header.createdAt,
           parentId: header.parentId,
           messageCount,

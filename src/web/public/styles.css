@@ -512,7 +512,9 @@ button.ghost {
 }
 
 .session-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   text-align: left;
   background: var(--panel-2);
@@ -531,16 +533,74 @@ button.ghost {
   border-color: var(--accent);
 }
 
-.session-item .name {
+.session-open {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.session-open .name {
   display: block;
   font-weight: 600;
 }
 
-.session-item .sub {
+.session-open .sub {
   display: block;
   margin-top: 4px;
   color: var(--muted);
   font: 11px/1.4 var(--mono);
+}
+
+.session-item-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.session-item-actions .chip {
+  padding: 5px 7px;
+  font-size: 11px;
+}
+
+.chip.danger {
+  background: #2a1214;
+  border-color: #7a1f1a;
+  color: #ffb4ae;
+}
+
+.field {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.field span {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.field select,
+.field input {
+  width: 100%;
+  padding: 9px 11px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font: 13px/1.4 var(--sans);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 12px;
 }
 
 @media (max-width: 640px) {

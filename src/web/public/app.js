@@ -20,6 +20,17 @@ const sessionModal = $("session-modal");
 const sessionList = $("session-list");
 const sessionsButton = $("sessions-button");
 const newSessionButton = $("new-session");
+const modelModal = $("model-modal");
+const modelForm = $("model-form");
+const modelButton = $("model-button");
+const modelProvider = $("model-provider");
+const modelName = $("model-name");
+const modelOptions = $("model-options");
+const sessionFormModal = $("session-form-modal");
+const sessionForm = $("session-form");
+const sessionFormTitle = $("session-form-title");
+const sessionFormInput = $("session-form-input");
+const sessionFormSubmit = $("session-form-submit");
 
 let socket = null;
 let token = "";
@@ -28,7 +39,11 @@ let intentionalClose = false;
 let reconnectTimer = null;
 let failures = 0;
 let currentSessionId = "";
+let currentProvider = "";
+let currentModel = "";
+let providers = [];
 let sessions = [];
+let pendingSessionAction = null;
 let currentAssistant = null;
 let renderTimer = null;
 const tools = new Map();
@@ -134,6 +149,8 @@ function renderMeta(info) {
   if (info.permissionMode) parts.push(info.permissionMode);
   metaEl.textContent = parts.join(" · ");
   currentSessionId = info.sessionId ?? currentSessionId;
+  currentProvider = info.provider ?? currentProvider;
+  currentModel = info.model ?? currentModel;
 }
 
 function showPermission(permission) {
@@ -276,6 +293,12 @@ function handleEvent(event) {
   }
 }
 
+function send(message) {
+  if (socket !== null && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(message));
+  }
+}
+
 function renderSessionList() {
   sessionList.textContent = "";
   if (sessions.length === 0) {
@@ -283,27 +306,80 @@ function renderSessionList() {
     return;
   }
   for (const session of sessions) {
-    const item = element("button", "session-item");
-    item.type = "button";
-    if (session.id === currentSessionId) item.classList.add("active");
-    item.appendChild(element("span", "name", session.name || session.id.slice(0, 8)));
+    const row = element("div", "session-item");
+    if (session.id === currentSessionId) row.classList.add("active");
+
+    const open = element("button", "session-open");
+    open.type = "button";
+    open.appendChild(element("span", "name", session.name || session.id.slice(0, 8)));
     const when = new Date(session.createdAt).toLocaleString();
-    item.appendChild(
+    open.appendChild(
       element(
         "span",
         "sub",
         `${session.provider}/${session.model} · ${session.messageCount} messages · ${when}`,
       ),
     );
-    item.addEventListener("click", () => {
+    open.addEventListener("click", () => {
       sessionModal.hidden = true;
       setStatus("switching", "busy");
-      if (socket !== null && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: "resume", id: session.id }));
-      }
+      send({ type: "resume", id: session.id });
     });
-    sessionList.appendChild(item);
+
+    const actions = element("div", "session-item-actions");
+    const rename = element("button", "chip", "Rename");
+    rename.type = "button";
+    rename.addEventListener("click", () => openSessionForm("rename", session));
+    const fork = element("button", "chip", "Fork");
+    fork.type = "button";
+    fork.addEventListener("click", () => openSessionForm("fork", session));
+    actions.append(rename, fork);
+    if (session.id !== currentSessionId) {
+      const remove = element("button", "chip danger", "Delete");
+      remove.type = "button";
+      remove.addEventListener("click", () => {
+        if (!window.confirm(`Delete session "${session.name}"? This cannot be undone.`)) return;
+        send({ type: "delete", id: session.id });
+      });
+      actions.appendChild(remove);
+    }
+
+    row.append(open, actions);
+    sessionList.appendChild(row);
   }
+}
+
+function renderModelOptions() {
+  modelProvider.textContent = "";
+  for (const provider of providers) {
+    const option = element("option", "", provider.name);
+    option.value = provider.id;
+    modelProvider.appendChild(option);
+  }
+  if (currentProvider) modelProvider.value = currentProvider;
+  const selected = providers.find((provider) => provider.id === modelProvider.value);
+  renderModelNames(selected);
+  modelName.value = currentModel;
+}
+
+function renderModelNames(provider) {
+  modelOptions.textContent = "";
+  for (const id of provider?.models ?? []) {
+    const option = document.createElement("option");
+    option.value = id;
+    modelOptions.appendChild(option);
+  }
+}
+
+function openSessionForm(action, session) {
+  pendingSessionAction = { action, id: session.id };
+  sessionFormTitle.textContent = action === "fork" ? "Fork session" : "Rename session";
+  sessionFormSubmit.textContent = action === "fork" ? "Fork" : "Save";
+  sessionFormInput.value = action === "fork" ? `${session.name} fork` : session.name;
+  sessionModal.hidden = true;
+  sessionFormModal.hidden = false;
+  sessionFormInput.focus();
+  sessionFormInput.select();
 }
 
 function handleMessage(message) {
@@ -326,6 +402,14 @@ function handleMessage(message) {
     case "sessions":
       sessions = Array.isArray(message.sessions) ? message.sessions : [];
       renderSessionList();
+      break;
+    case "catalog":
+      providers = Array.isArray(message.providers) ? message.providers : [];
+      if (!modelModal.hidden) renderModelOptions();
+      break;
+    case "model_changed":
+      renderMeta(message.info);
+      setStatus("ready", "ready");
       break;
     case "session":
       sessionModal.hidden = true;
@@ -466,6 +550,64 @@ newSessionButton.addEventListener("click", () => {
   if (socket !== null && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: "new" }));
   }
+});
+
+modelButton.addEventListener("click", () => {
+  modelModal.hidden = false;
+  renderModelOptions();
+  if (providers.length === 0) send({ type: "catalog" });
+  modelName.focus();
+});
+
+modelProvider.addEventListener("change", () => {
+  const provider = providers.find((entry) => entry.id === modelProvider.value);
+  renderModelNames(provider);
+  if (provider && provider.defaultModel) modelName.value = provider.defaultModel;
+});
+
+modelForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const provider = modelProvider.value;
+  const model = modelName.value.trim();
+  if (provider.length === 0 || model.length === 0) return;
+  modelModal.hidden = true;
+  setStatus("switching", "busy");
+  send({ type: "model", provider, model });
+});
+
+$("model-cancel").addEventListener("click", () => {
+  modelModal.hidden = true;
+});
+
+sessionForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const action = pendingSessionAction;
+  if (!action) return;
+  const name = sessionFormInput.value.trim();
+  sessionFormModal.hidden = true;
+  pendingSessionAction = null;
+  if (action.action === "rename") {
+    if (name.length > 0) send({ type: "rename", id: action.id, name });
+    return;
+  }
+  setStatus("forking", "busy");
+  send({ type: "fork", id: action.id, ...(name.length > 0 ? { name } : {}) });
+});
+
+$("session-form-cancel").addEventListener("click", () => {
+  sessionFormModal.hidden = true;
+  pendingSessionAction = null;
+});
+
+sessionFormModal.addEventListener("click", (event) => {
+  if (event.target === sessionFormModal) {
+    sessionFormModal.hidden = true;
+    pendingSessionAction = null;
+  }
+});
+
+modelModal.addEventListener("click", (event) => {
+  if (event.target === modelModal) modelModal.hidden = true;
 });
 
 $("sessions-close").addEventListener("click", () => {

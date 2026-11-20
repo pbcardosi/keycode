@@ -328,6 +328,7 @@ A session is append-only JSONL:
 {"type":"tool_result","toolCallId":"t1","ok":true,"content":[{"type":"text","text":"..."}],"timestamp":"2026-11-19T10:00:03Z"}
 {"type":"checkpoint","id":"c1","turn":1,"files":[{"path":"src/auth.ts","backup":"checkpoints/c1/src/auth.ts"}],"timestamp":"2026-11-19T10:00:04Z"}
 {"type":"summary","id":"s1","replaces":["m1","m2"],"text":"...","tokensBefore":42000,"tokensAfter":6000,"timestamp":"2026-11-19T10:05:00Z"}
+{"type":"model","provider":"ollama","model":"qwen3-coder","timestamp":"2026-11-19T10:06:00Z"}
 ```
 
 Rules:
@@ -338,7 +339,9 @@ Rules:
 - Session IDs are UUID v4.
 - `--session-id` must be a valid UUID.
 - Fork copies messages up to the current point and sets `parentId`.
+- The latest `model` record overrides the header for resume and session lists.
 - `clear` starts a new session; the old file is never deleted.
+- Remote Control can delete a non-active session; the active session cannot be deleted.
 
 ### 7.2 Settings
 

@@ -37,6 +37,8 @@ First alpha.
   browser approvals, stop, and token pairing on loopback.
 - Web UI Markdown rendering with copyable code blocks, expandable tool output,
   and a session list with new-session and resume-with-history.
+- Web UI session rename, fork, and delete, plus provider/model switching that
+  keeps the current session and persists in the session file.
 
 ### Known limitations
 

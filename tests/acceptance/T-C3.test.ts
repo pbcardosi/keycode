@@ -41,6 +41,16 @@ describe("T-C3: Session persistence", () => {
     const resumedView = store.load(older?.id ?? "");
     expect(resumedView.messages.length).toBeGreaterThan(view.messages.length);
     expect(resumedView.messages.some((message) => message.role === "user")).toBe(true);
+
+    store.setModel(older?.id ?? "", "ollama", "qwen3-coder");
+    expect(store.load(older?.id ?? "").header).toMatchObject({
+      provider: "ollama",
+      model: "qwen3-coder",
+    });
+    expect(store.list().find((session) => session.id === older?.id)).toMatchObject({
+      provider: "ollama",
+      model: "qwen3-coder",
+    });
   }, 30000);
 
   it("forks a resumed session and keeps the original intact", async () => {

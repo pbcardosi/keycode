@@ -14,6 +14,20 @@ async function nextOfType(client: Awaited<ReturnType<typeof connectWebSocket>>, 
   throw new Error(`did not receive a ${type} message`);
 }
 
+async function nextSessionsWhere(
+  client: Awaited<ReturnType<typeof connectWebSocket>>,
+  predicate: (session: Record<string, unknown>) => boolean,
+) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const message = JSON.parse(await client.nextMessage()) as {
+      type: string;
+      sessions?: Array<Record<string, unknown>>;
+    };
+    if (message.type === "sessions" && (message.sessions ?? []).some(predicate)) return message;
+  }
+  throw new Error("did not receive the expected session list");
+}
+
 describe("T-I5: Remote Control", () => {
   it("binds loopback, streams a reply with the pairing token, and rejects a wrong token", async () => {
     let stopped = false;
@@ -63,17 +77,22 @@ describe("T-I5: Remote Control", () => {
     };
     const resolved: Array<[string, string]> = [];
     const resumed: Array<string | null> = [];
+    const renamed: Array<[string, string]> = [];
+    const forked: Array<[string, string | undefined]> = [];
+    const deleted: string[] = [];
+    const models: Array<[string, string]> = [];
+    const baseInfo = (provider = "fake", model = "fake-model") => ({
+      provider,
+      model,
+      sessionId: "12345678-0000-0000-0000-000000000000",
+      permissionMode: "manual",
+    });
 
     const server = await startRemoteControl({
       token: "pair-token",
       staticDir: resolve(process.cwd(), "dist/web/public"),
       handler: {
-        info: () => ({
-          provider: "fake",
-          model: "fake-model",
-          sessionId: "12345678-0000-0000-0000-000000000000",
-          permissionMode: "manual",
-        }),
+        info: () => baseInfo(),
         sessions: () => [
           {
             id: "12345678-0000-0000-0000-000000000000",
@@ -106,6 +125,45 @@ describe("T-I5: Remote Control", () => {
             sessionId: id ?? "bbbbbbbb-0000-0000-0000-000000000000",
             permissionMode: "manual",
           };
+        },
+        catalog: () => [
+          {
+            id: "fake",
+            name: "Fake",
+            models: ["fake-model", "other-model"],
+            defaultModel: "fake-model",
+            free: true,
+            local: true,
+          },
+        ],
+        setModel: (provider, model) => {
+          models.push([provider, model]);
+          return baseInfo(provider, model);
+        },
+        renameSession: (id, name) => {
+          renamed.push([id, name]);
+          return [
+            {
+              id,
+              name,
+              messageCount: 1,
+              createdAt: "2026-11-20T00:00:00.000Z",
+              provider: "fake",
+              model: "fake-model",
+            },
+          ];
+        },
+        forkSession: (id, name) => {
+          forked.push([id, name]);
+          return {
+            provider: "fake",
+            model: "fake-model",
+            sessionId: "cccccccc-0000-0000-0000-000000000000",
+            permissionMode: "manual",
+          };
+        },
+        deleteSession: (id) => {
+          deleted.push(id);
         },
         subscribe: (listener) => {
           emit = listener;
@@ -198,6 +256,37 @@ describe("T-I5: Remote Control", () => {
     const created = (await nextOfType(client, "session")) as { info: { sessionId: string } };
     expect(created.info.sessionId).toBe("bbbbbbbb-0000-0000-0000-000000000000");
     expect(resumed).toEqual(["aaaaaaaa-0000-0000-0000-000000000000", null]);
+
+    client.send(JSON.stringify({ type: "catalog" }));
+    const catalog = (await nextOfType(client, "catalog")) as {
+      providers: Array<{ id: string; models: string[] }>;
+    };
+    expect(catalog.providers[0]).toMatchObject({ id: "fake", models: ["fake-model", "other-model"] });
+
+    client.send(JSON.stringify({ type: "model", provider: "fake", model: "other-model" }));
+    const changed = (await nextOfType(client, "model_changed")) as {
+      info: { provider: string; model: string };
+    };
+    expect(changed.info).toMatchObject({ provider: "fake", model: "other-model" });
+    expect(models).toEqual([["fake", "other-model"]]);
+
+    client.send(JSON.stringify({ type: "rename", id: "aaaaaaaa-0000-0000-0000-000000000000", name: "renamed" }));
+    await nextSessionsWhere(client, (session) => session.name === "renamed");
+    expect(renamed).toEqual([["aaaaaaaa-0000-0000-0000-000000000000", "renamed"]]);
+
+    client.send(JSON.stringify({ type: "delete", id: "aaaaaaaa-0000-0000-0000-000000000000" }));
+    await nextSessionsWhere(
+      client,
+      (session) => session.id !== "aaaaaaaa-0000-0000-0000-000000000000",
+    );
+    expect(deleted).toEqual(["aaaaaaaa-0000-0000-0000-000000000000"]);
+
+    client.send(
+      JSON.stringify({ type: "fork", id: "aaaaaaaa-0000-0000-0000-000000000000", name: "copy" }),
+    );
+    const forkedSession = (await nextOfType(client, "session")) as { info: { sessionId: string } };
+    expect(forkedSession.info.sessionId).toBe("cccccccc-0000-0000-0000-000000000000");
+    expect(forked).toEqual([["aaaaaaaa-0000-0000-0000-000000000000", "copy"]]);
 
     await expect(connectWebSocket(port, "/?token=wrong")).rejects.toThrow();
     client.close();

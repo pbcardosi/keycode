@@ -55,6 +55,13 @@ export interface RenameRecord {
   timestamp: string;
 }
 
+export interface ModelChangeRecord {
+  type: "model";
+  provider: string;
+  model: string;
+  timestamp: string;
+}
+
 export interface ContextRecord {
   type: "context";
   systemPrompt: string;
@@ -87,6 +94,7 @@ export type SessionRecord =
   | CheckpointRecord
   | SummaryRecord
   | RenameRecord
+  | ModelChangeRecord
   | ContextRecord
   | RewindRecord
   | TodosRecord

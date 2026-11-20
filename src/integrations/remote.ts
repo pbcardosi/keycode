@@ -38,6 +38,15 @@ export interface RemoteSession {
   parentId?: string | undefined;
 }
 
+export interface RemoteProvider {
+  id: string;
+  name: string;
+  models: string[];
+  defaultModel: string;
+  free: boolean;
+  local: boolean;
+}
+
 export interface RemoteHandler {
   onPrompt(prompt: string): Promise<string>;
   onStop?: (() => void) | undefined;
@@ -46,6 +55,15 @@ export interface RemoteHandler {
   sessions?: (() => Promise<RemoteSession[]> | RemoteSession[]) | undefined;
   history?: (() => unknown[]) | undefined;
   resume?: ((id: string | null) => Promise<RemoteInfo> | RemoteInfo) | undefined;
+  catalog?: (() => Promise<RemoteProvider[]> | RemoteProvider[]) | undefined;
+  setModel?: ((provider: string, model: string) => Promise<RemoteInfo> | RemoteInfo) | undefined;
+  renameSession?:
+    | ((id: string, name: string) => Promise<RemoteSession[]> | RemoteSession[])
+    | undefined;
+  forkSession?:
+    | ((id: string, name?: string | undefined) => Promise<RemoteInfo> | RemoteInfo)
+    | undefined;
+  deleteSession?: ((id: string) => Promise<void> | void) | undefined;
 }
 
 export interface RemoteServerOptions {
@@ -156,6 +174,19 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
 
   const sendSessions = async (client: WsConnection): Promise<void> => {
     client.send(JSON.stringify({ type: "sessions", sessions: await sessions() }));
+  };
+
+  const catalog = async (): Promise<RemoteProvider[]> => {
+    if (options.handler.catalog === undefined) return [];
+    try {
+      return await options.handler.catalog();
+    } catch {
+      return [];
+    }
+  };
+
+  const sendCatalog = async (client: WsConnection): Promise<void> => {
+    client.send(JSON.stringify({ type: "catalog", providers: await catalog() }));
   };
 
   const history = (): unknown[] => {
@@ -271,13 +302,22 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
       }),
     );
     void sendSessions(connection);
+    void sendCatalog(connection);
 
     connection.onClose(() => {
       clients.delete(connection);
     });
 
     connection.onMessage((text) => {
-      let message: { type?: string; prompt?: string; id?: string; choice?: string };
+      let message: {
+        type?: string;
+        prompt?: string;
+        id?: string;
+        name?: string;
+        provider?: string;
+        model?: string;
+        choice?: string;
+      };
       try {
         message = JSON.parse(text) as typeof message;
       } catch {
@@ -301,6 +341,117 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
 
       if (message.type === "sessions") {
         void sendSessions(connection);
+        return;
+      }
+
+      if (message.type === "catalog") {
+        void sendCatalog(connection);
+        return;
+      }
+
+      if (message.type === "rename" && message.id !== undefined && typeof message.name === "string") {
+        if (options.handler.renameSession === undefined) {
+          connection.send(JSON.stringify({ type: "error", message: "rename is not available" }));
+          return;
+        }
+        void (async () => {
+          try {
+            const list = await options.handler.renameSession?.(message.id ?? "", message.name ?? "");
+            broadcast({ type: "sessions", sessions: list ?? (await sessions()) });
+          } catch (error) {
+            connection.send(
+              JSON.stringify({ type: "error", message: (error as Error).message || "rename failed" }),
+            );
+          }
+        })();
+        return;
+      }
+
+      if (
+        (message.type === "fork" || message.type === "model") &&
+        busy
+      ) {
+        connection.send(JSON.stringify({ type: "error", message: "Stop the current turn first" }));
+        return;
+      }
+
+      if (message.type === "fork" && message.id !== undefined) {
+        if (options.handler.forkSession === undefined) {
+          connection.send(JSON.stringify({ type: "error", message: "fork is not available" }));
+          return;
+        }
+        busy = true;
+        void (async () => {
+          try {
+            const next =
+              (await options.handler.forkSession?.(
+                message.id ?? "",
+                typeof message.name === "string" ? message.name : undefined,
+              )) ?? info();
+            broadcast({
+              type: "session",
+              info: next,
+              history: history(),
+              permission: currentPermission(),
+            });
+            broadcast({ type: "sessions", sessions: await sessions() });
+          } catch (error) {
+            connection.send(
+              JSON.stringify({ type: "error", message: (error as Error).message || "fork failed" }),
+            );
+          } finally {
+            busy = false;
+          }
+        })();
+        return;
+      }
+
+      if (
+        message.type === "model" &&
+        typeof message.provider === "string" &&
+        typeof message.model === "string"
+      ) {
+        if (options.handler.setModel === undefined) {
+          connection.send(JSON.stringify({ type: "error", message: "model switching is not available" }));
+          return;
+        }
+        busy = true;
+        void (async () => {
+          try {
+            const next =
+              (await options.handler.setModel?.(message.provider ?? "", message.model ?? "")) ?? info();
+            broadcast({ type: "model_changed", info: next });
+            broadcast({ type: "sessions", sessions: await sessions() });
+          } catch (error) {
+            connection.send(
+              JSON.stringify({ type: "error", message: (error as Error).message || "model switch failed" }),
+            );
+          } finally {
+            busy = false;
+          }
+        })();
+        return;
+      }
+
+      if (message.type === "delete" && message.id !== undefined) {
+        if (options.handler.deleteSession === undefined) {
+          connection.send(JSON.stringify({ type: "error", message: "delete is not available" }));
+          return;
+        }
+        if (message.id === info().sessionId) {
+          connection.send(JSON.stringify({ type: "error", message: "Cannot delete the active session" }));
+          return;
+        }
+        void (async () => {
+          try {
+            await options.handler.deleteSession?.(message.id ?? "");
+            broadcast({ type: "sessions", sessions: await sessions() });
+          } catch (error) {
+            connection.send(
+              JSON.stringify({ type: "error", message: (error as Error).message || "delete failed" }),
+            );
+          }
+        })();
         return;
       }
 

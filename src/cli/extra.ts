@@ -6,7 +6,8 @@ import { pathToFileURL } from "node:url";
 import { stdout } from "node:process";
 import type { PermissionMode } from "../contracts/permissions.js";
 import type { ToolContext } from "../contracts/tool.js";
-import { createAgentSetup } from "../app/factory.js";
+import { createAgentSetup, type AgentSetupOptions } from "../app/factory.js";
+import { PRESETS } from "../providers/presets.js";
 import { keycodeHome, projectDir } from "../util/paths.js";
 import { silentLogger } from "../util/logger.js";
 import { systemClock } from "../util/clock.js";
@@ -405,18 +406,24 @@ export function registerExtraCommands(program: Command): void {
       const cmd = args[args.length - 1] as Command;
       const options = opts(cmd);
       const broker = new PermissionBroker();
-      const baseOptions = {
+      let currentProvider =
+        typeof options.provider === "string" ? options.provider : undefined;
+      let currentModel = typeof options.model === "string" ? options.model : undefined;
+      const buildOptions = (overrides: Partial<AgentSetupOptions> = {}): AgentSetupOptions => ({
         cwd: process.cwd(),
-        ...(typeof options.provider === "string" ? { provider: options.provider } : {}),
-        ...(typeof options.model === "string" ? { model: options.model } : {}),
+        ...(currentProvider === undefined ? {} : { provider: currentProvider }),
+        ...(currentModel === undefined ? {} : { model: currentModel }),
         permissionMode: options.permissionMode as PermissionMode,
         prompter: broker,
-      };
+        ...overrides,
+      });
       const eventListeners = new Set<(event: unknown) => void>();
       const dispatch = (event: unknown): void => {
         for (const listener of eventListeners) listener(event);
       };
-      let setup = await createAgentSetup(baseOptions);
+      let setup = await createAgentSetup(buildOptions());
+      currentProvider = setup.providerId;
+      currentModel = setup.model;
       let unsubscribeAgent = setup.agent.subscribe(dispatch);
       let controller = new AbortController();
 
@@ -431,6 +438,48 @@ export function registerExtraCommands(program: Command): void {
         sessionId: current.sessionId,
         permissionMode: current.permissionMode,
       });
+
+      const sessionList = (): ReturnType<typeof setup.store.list> =>
+        setup.store.list().slice(0, 50);
+
+      const activate = async (overrides: Partial<AgentSetupOptions>) => {
+        broker.cancelAll();
+        unsubscribeAgent();
+        controller.abort();
+        await Promise.all(setup.mcpClients.map((client) => client.close()));
+        setup = await createAgentSetup(buildOptions(overrides));
+        currentProvider = setup.providerId;
+        currentModel = setup.model;
+        unsubscribeAgent = setup.agent.subscribe(dispatch);
+        controller = new AbortController();
+        return describe(setup);
+      };
+
+      const providerCatalog = () => {
+        const custom = setup.settings.providers ?? {};
+        const ids = [
+          ...new Set([
+            ...Object.keys(PRESETS),
+            ...Object.keys(custom),
+            ...(currentProvider === undefined ? [] : [currentProvider]),
+          ]),
+        ];
+        return ids.map((id) => {
+          const preset = PRESETS[id];
+          const config = custom[id];
+          return {
+            id,
+            name: preset?.displayName ?? id,
+            models: preset?.models ?? config?.models ?? (id === currentProvider && currentModel ? [currentModel] : []),
+            defaultModel:
+              preset?.defaultModel ??
+              config?.defaultModel ??
+              (id === currentProvider ? (currentModel ?? "") : ""),
+            free: preset?.free ?? true,
+            local: preset?.local ?? (id === "fake" || id === currentProvider),
+          };
+        });
+      };
 
       const remotePermission = (): {
         id: string;
@@ -471,7 +520,7 @@ export function registerExtraCommands(program: Command): void {
             controller = new AbortController();
           },
           sessions: () =>
-            setup.store.list().slice(0, 50).map((session) => ({
+            sessionList().map((session) => ({
               id: session.id,
               name: session.name,
               messageCount: session.messageCount,
@@ -484,17 +533,41 @@ export function registerExtraCommands(program: Command): void {
             })),
           history: () => setup.store.load(setup.sessionId).messages,
           resume: async (id) => {
-            broker.cancelAll();
-            unsubscribeAgent();
-            controller.abort();
-            await Promise.all(setup.mcpClients.map((client) => client.close()));
-            setup = await createAgentSetup({
-              ...baseOptions,
-              ...(id === null ? {} : { resume: id }),
+            if (id === null) return activate({});
+            const meta = setup.store.resolve(id);
+            return activate({ resume: meta.id, provider: meta.provider, model: meta.model });
+          },
+          catalog: () => providerCatalog(),
+          setModel: async (provider, model) => {
+            const sessionId = setup.sessionId;
+            setup.store.setModel(sessionId, provider, model);
+            return activate({ resume: sessionId, provider, model });
+          },
+          renameSession: (id, name) => {
+            setup.store.rename(id, name.trim().length === 0 ? id.slice(0, 8) : name.trim());
+            return sessionList().map((session) => ({
+              id: session.id,
+              name: session.name,
+              messageCount: session.messageCount,
+              createdAt: session.createdAt,
+              provider: session.provider,
+              model: session.model,
+              ...(session.parentId === undefined || session.parentId === null
+                ? {}
+                : { parentId: session.parentId }),
+            }));
+          },
+          forkSession: async (id, name) => {
+            const header = setup.store.fork(id, name);
+            const view = setup.store.load(header.id);
+            return activate({
+              resume: header.id,
+              provider: view.header.provider,
+              model: view.header.model,
             });
-            unsubscribeAgent = setup.agent.subscribe(dispatch);
-            controller = new AbortController();
-            return describe(setup);
+          },
+          deleteSession: (id) => {
+            setup.store.delete(id);
           },
         },
         permissions: {
