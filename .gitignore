@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# Test output
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+
+# Local runtime data (root only; fixtures may use these names)
+/.keycode/
+/.claude/
+*.session.jsonl
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+credentials.json
+
+# Extracted artifacts and scratch data
+artifacts/
+extracted/
+claude-js/
+claude.exe
+*.bun
+
+# Editor and OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+npm-debug.log*

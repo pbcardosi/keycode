@@ -1,0 +1,16 @@
+{
+  "name": "keycode-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A free, local-first, bring-your-own-key coding agent.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "validate:spec": "node scripts/validate-spec.mjs",
+    "test": "node -e \"console.log('No runtime tests yet: specification phase')\"",
+    "verify": "npm run validate:spec && npm test"
+  }
+}
