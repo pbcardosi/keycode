@@ -62,6 +62,17 @@ function checkRipgrep(): DoctorCheck {
     : { name: "ripgrep", status: "warn", detail: "rg is not installed; the built-in search is used" };
 }
 
+async function ollamaReachable(fetchImpl: typeof fetch): Promise<boolean> {
+  try {
+    const response = await fetchImpl("http://127.0.0.1:11434/v1/models", {
+      signal: AbortSignal.timeout(500),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 function repairSettingsFiles(cwd: string, home: string, env: NodeJS.ProcessEnv): string[] {
   const repaired: string[] = [];
   for (const path of settingsCandidatePaths({ cwd, home, env })) {
@@ -152,11 +163,18 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     detail: existsSync(managed) ? managed : "no managed settings file",
   });
 
-  const providerId =
-    options.provider ??
-    env.KEYCODE_PROVIDER ??
-    loaded.settings.provider ??
-    (env.GEMINI_API_KEY ? "gemini" : env.GROQ_API_KEY ? "groq" : env.OPENROUTER_API_KEY ? "openrouter" : undefined);
+  let providerId = options.provider ?? env.KEYCODE_PROVIDER ?? loaded.settings.provider;
+  if (providerId === undefined) {
+    if (await ollamaReachable(options.fetchImpl ?? fetch)) {
+      providerId = "ollama";
+    } else if (env.GEMINI_API_KEY) {
+      providerId = "gemini";
+    } else if (env.GROQ_API_KEY) {
+      providerId = "groq";
+    } else if (env.OPENROUTER_API_KEY) {
+      providerId = "openrouter";
+    }
+  }
 
   if (!providerId) {
     checks.push({
