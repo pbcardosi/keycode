@@ -34,7 +34,7 @@ export function createGlobTool(): Tool<GlobInputType> {
 
       const text =
         matches.length === 0 ? "No files found." : matches.map((file) => file.relative).join("\n");
-      return toolOk(text, { count: matches.length });
+      return toolOk(text, { count: matches.length, truncated: matches.length === (input.limit ?? 200) });
     },
   };
 }

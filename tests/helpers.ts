@@ -3,6 +3,11 @@ import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createHash, randomUUID } from "node:crypto";
+import type { ToolContext } from "../dist/contracts/tool.js";
+import { PermissionService } from "../dist/permissions/pipeline.js";
+import { silentLogger } from "../dist/util/logger.js";
+import { systemClock } from "../dist/util/clock.js";
+import { SessionStore } from "../dist/storage/session.js";
 
 const CLI = resolve("dist/cli/index.js");
 
@@ -93,3 +98,41 @@ export function fakeScript(events: unknown[]): string {
 export function uuid(): string {
   return randomUUID();
 }
+
+// Re-exports kept importable from one place.
+export { silentLogger } from "../dist/util/logger.js";
+export { systemClock } from "../dist/util/clock.js";
+export { PermissionService } from "../dist/permissions/pipeline.js";
+export { SessionStore } from "../dist/storage/session.js";
+
+export interface ToolCtxOptions {
+  cwd: string;
+  home?: string | undefined;
+  workspaceRoots?: string[] | undefined;
+  askQuestions?: ToolContext["askQuestions"] | undefined;
+  mode?: "manual" | "bypassPermissions" | "auto" | "dontAsk" | undefined;
+}
+
+export function makeToolCtx(options: ToolCtxOptions): ToolContext {
+  const cwd = resolve(options.cwd);
+  const roots = options.workspaceRoots ?? [cwd];
+  return {
+    sessionId: "sess-tool-test",
+    cwd,
+    workspaceRoots: roots,
+    signal: new AbortController().signal,
+    permissions: new PermissionService({ mode: options.mode ?? "bypassPermissions", cwd, roots }),
+    logger: silentLogger,
+    clock: systemClock,
+    state: { readFiles: new Set(), todos: [], metadata: new Map() },
+    home: options.home ?? makeHome(),
+    ...(options.askQuestions === undefined ? {} : { askQuestions: options.askQuestions }),
+  };
+}
+
+export function textOf(result: { content: Array<{ type: string; text?: string }> }): string {
+  return result.content
+    .map((block) => (block.type === "text" ? block.text ?? "" : `[${block.type}]`))
+    .join("\n");
+}
+
