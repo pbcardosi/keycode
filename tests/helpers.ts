@@ -2,7 +2,8 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { connect as netConnect } from "node:net";
 import type { ToolContext } from "../dist/contracts/tool.js";
 import { PermissionService } from "../dist/permissions/pipeline.js";
 import { silentLogger } from "../dist/util/logger.js";
@@ -97,6 +98,115 @@ export function fakeScript(events: unknown[]): string {
 
 export function uuid(): string {
   return randomUUID();
+}
+
+export interface WsTestClient {
+  send(text: string): void;
+  nextMessage(timeoutMs?: number): Promise<string>;
+  close(): void;
+}
+
+export async function connectWebSocket(port: number): Promise<WsTestClient> {
+  const socket = netConnect({ port, host: "127.0.0.1" });
+  const key = randomBytes(16).toString("base64");
+  const messages: string[] = [];
+  let waiter: ((text: string) => void) | null = null;
+  let buffer = Buffer.alloc(0);
+
+  const parseFrames = (): void => {
+    while (true) {
+      if (buffer.length < 2) return;
+      const second = buffer[1] ?? 0;
+      let length = second & 0x7f;
+      let offset = 2;
+      if (length === 126) {
+        if (buffer.length < 4) return;
+        length = buffer.readUInt16BE(2);
+        offset = 4;
+      } else if (length === 127) {
+        if (buffer.length < 10) return;
+        length = Number(buffer.readBigUInt64BE(2));
+        offset = 10;
+      }
+      if (buffer.length < offset + length) return;
+      const text = buffer.subarray(offset, offset + length).toString("utf8");
+      buffer = buffer.subarray(offset + length);
+      if (waiter) {
+        const resolve = waiter;
+        waiter = null;
+        resolve(text);
+      } else {
+        messages.push(text);
+      }
+    }
+  };
+
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    socket.once("error", rejectPromise);
+    socket.once("connect", () => {
+      socket.write(
+        [
+          "GET / HTTP/1.1",
+          "Host: 127.0.0.1",
+          "Upgrade: websocket",
+          "Connection: Upgrade",
+          `Sec-WebSocket-Key: ${key}`,
+          "Sec-WebSocket-Version: 13",
+          "",
+          "",
+        ].join("\r\n"),
+      );
+    });
+    let handshake = Buffer.alloc(0);
+    const onData = (chunk: Buffer): void => {
+      handshake = Buffer.concat([handshake, chunk]);
+      const end = handshake.indexOf("\r\n\r\n");
+      if (end === -1) return;
+      socket.off("data", onData);
+      if (!handshake.subarray(0, end).toString("utf8").includes("101")) {
+        rejectPromise(new Error("WebSocket handshake failed"));
+        return;
+      }
+      const rest = handshake.subarray(end + 4);
+      if (rest.length > 0) {
+        buffer = Buffer.concat([buffer, rest]);
+        parseFrames();
+      }
+      socket.on("data", (next: Buffer) => {
+        buffer = Buffer.concat([buffer, next]);
+        parseFrames();
+      });
+      resolvePromise();
+    };
+    socket.on("data", onData);
+  });
+
+  return {
+    send(text: string): void {
+      const payload = Buffer.from(text, "utf8");
+      const mask = randomBytes(4);
+      const header = Buffer.from([0x81, 0x80 | payload.length]);
+      const masked = Buffer.from(payload.map((byte, index) => byte ^ (mask[index % 4] ?? 0)));
+      socket.write(Buffer.concat([header, mask, masked]));
+    },
+    nextMessage(timeoutMs = 2_000): Promise<string> {
+      const queued = messages.shift();
+      if (queued !== undefined) return Promise.resolve(queued);
+      return new Promise<string>((resolvePromise, rejectPromise) => {
+        const timer = setTimeout(() => {
+          waiter = null;
+          rejectPromise(new Error("Timed out waiting for a WebSocket message"));
+        }, timeoutMs);
+        waiter = (text) => {
+          clearTimeout(timer);
+          resolvePromise(text);
+        };
+      });
+    },
+    close(): void {
+      socket.end();
+    },
+  };
 }
 
 export function writeFakeLspServer(path: string): void {
