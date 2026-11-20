@@ -19,6 +19,7 @@ import { BackgroundSessions } from "../integrations/background.js";
 import { IdeBridge } from "../integrations/ide.js";
 import { startRemoteControl, defaultWebDir } from "../integrations/remote.js";
 import { PermissionBroker } from "../permissions/broker.js";
+import { QuestionBroker } from "../questions/broker.js";
 import type { PromptChoice } from "../permissions/pipeline.js";
 import { createWorktree, listWorktrees, removeWorktree } from "../integrations/worktrees.js";
 import {
@@ -406,6 +407,7 @@ export function registerExtraCommands(program: Command): void {
       const cmd = args[args.length - 1] as Command;
       const options = opts(cmd);
       const broker = new PermissionBroker();
+      const questions = new QuestionBroker();
       let currentProvider =
         typeof options.provider === "string" ? options.provider : undefined;
       let currentModel = typeof options.model === "string" ? options.model : undefined;
@@ -415,6 +417,7 @@ export function registerExtraCommands(program: Command): void {
         ...(currentModel === undefined ? {} : { model: currentModel }),
         permissionMode: options.permissionMode as PermissionMode,
         prompter: broker,
+        askQuestions: (items) => questions.ask(items),
         ...overrides,
       });
       const eventListeners = new Set<(event: unknown) => void>();
@@ -444,6 +447,7 @@ export function registerExtraCommands(program: Command): void {
 
       const activate = async (overrides: Partial<AgentSetupOptions>) => {
         broker.cancelAll();
+        questions.cancelAll();
         unsubscribeAgent();
         controller.abort();
         setup.lsp?.stop();
@@ -518,6 +522,7 @@ export function registerExtraCommands(program: Command): void {
           onStop: () => {
             controller.abort();
             broker.cancelAll();
+            questions.cancelAll();
             controller = new AbortController();
           },
           sessions: () =>
@@ -588,12 +593,26 @@ export function registerExtraCommands(program: Command): void {
             });
           },
         },
+        questions: {
+          current: () => {
+            const pending = questions.current;
+            if (!pending) return null;
+            return { id: pending.id, questions: pending.questions };
+          },
+          subscribe: (listener) => questions.subscribe(() => listener(
+            questions.current === null
+              ? null
+              : { id: questions.current.id, questions: questions.current.questions },
+          )),
+          resolve: (id, result) => questions.resolveById(id, result),
+        },
       });
       stdout.write(`Remote Control: ${server.url}/#token=${server.token}\n`);
       stdout.write(`Token: ${server.token}\nSession: ${setup.sessionId}\n`);
       if (options.open === true) openBrowser(`${server.url}/#token=${server.token}`);
       keepAlive(async () => {
         broker.cancelAll();
+        questions.cancelAll();
         unsubscribeAgent();
         setup.lsp?.stop();
         await Promise.all(setup.mcpClients.map((client) => client.close()));

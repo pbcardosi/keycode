@@ -293,6 +293,75 @@ describe("T-I5: Remote Control", () => {
     await server.close();
   });
 
+  it("delivers AskUserQuestion questions and accepts answers", async () => {
+    let pending: {
+      id: string;
+      questions: Array<{
+        question: string;
+        header: string;
+        options: Array<{ label: string; description?: string }>;
+      }>;
+    } | null = {
+      id: "question-1",
+      questions: [
+        {
+          question: "Pick a color",
+          header: "Color",
+          options: [{ label: "Cyan" }, { label: "Magenta" }],
+        },
+      ],
+    };
+    let notify: (question: typeof pending) => void = () => undefined;
+    const answers: unknown[] = [];
+
+    const server = await startRemoteControl({
+      token: "pair-token",
+      handler: { onPrompt: async () => "ok" },
+      questions: {
+        current: () => pending,
+        subscribe: (listener) => {
+          notify = listener;
+          return () => {
+            notify = () => undefined;
+          };
+        },
+        resolve: (id, result) => {
+          answers.push({ id, result });
+          pending = null;
+          notify(null);
+          return true;
+        },
+      },
+    });
+
+    const port = Number(new URL(server.url).port);
+    const client = await connectWebSocket(port, "/?token=pair-token");
+    const hello = (await nextOfType(client, "hello")) as {
+      question: { id: string; questions: Array<{ header: string }> } | null;
+    };
+    expect(hello.question?.id).toBe("question-1");
+    expect(hello.question?.questions[0]?.header).toBe("Color");
+
+    client.send(
+      JSON.stringify({
+        type: "answer",
+        id: "question-1",
+        answers: [{ header: "Color", selected: ["Cyan"] }],
+      }),
+    );
+    const cleared = (await nextOfType(client, "question")) as { question: unknown };
+    expect(cleared.question).toBeNull();
+    expect(answers).toEqual([
+      {
+        id: "question-1",
+        result: { answers: [{ header: "Color", selected: ["Cyan"] }] },
+      },
+    ]);
+
+    client.close();
+    await server.close();
+  });
+
   it("forwards editor context and prepends it to prompts", async () => {
     const prompts: string[] = [];
     const server = await startRemoteControl({

@@ -18,6 +18,9 @@ const permissionPreview = $("permission-preview");
 const permissionDiff = $("permission-diff");
 const contextBar = $("context-bar");
 const contextLabel = $("context-label");
+const questionModal = $("question-modal");
+const questionForm = $("question-form");
+const questionBody = $("question-body");
 const sessionModal = $("session-modal");
 const sessionList = $("session-list");
 const sessionsButton = $("sessions-button");
@@ -46,6 +49,7 @@ let currentModel = "";
 let providers = [];
 let sessions = [];
 let pendingSessionAction = null;
+let currentQuestion = null;
 let currentAssistant = null;
 let renderTimer = null;
 const tools = new Map();
@@ -214,6 +218,65 @@ function resolvePermission(choice) {
   socket.send(JSON.stringify({ type: "permission", id, choice }));
 }
 
+function showQuestion(question) {
+  if (!question || !Array.isArray(question.questions) || question.questions.length === 0) {
+    currentQuestion = null;
+    questionModal.hidden = true;
+    return;
+  }
+  currentQuestion = question;
+  questionForm.dataset.id = question.id;
+  questionBody.textContent = "";
+  question.questions.forEach((item, index) => {
+    const block = element("div", "question-item");
+    block.appendChild(element("h3", "", item.header));
+    block.appendChild(element("p", "", item.question));
+    for (const option of item.options ?? []) {
+      const label = element("label", "option");
+      const input = element("input");
+      input.type = item.multiple ? "checkbox" : "radio";
+      input.name = `question-${index}`;
+      input.value = option.label;
+      label.appendChild(input);
+      const text = element("span");
+      text.appendChild(element("span", "option-label", option.label));
+      if (option.description) {
+        text.appendChild(element("span", "option-description", option.description));
+      }
+      label.appendChild(text);
+      block.appendChild(label);
+    }
+    const custom = element("input", "question-custom");
+    custom.type = "text";
+    custom.placeholder = "Other answer…";
+    block.appendChild(custom);
+    questionBody.appendChild(block);
+  });
+  questionModal.hidden = false;
+  const first = questionBody.querySelector("input");
+  if (first) first.focus();
+}
+
+function submitQuestion(cancelled) {
+  const id = questionForm.dataset.id;
+  questionModal.hidden = true;
+  currentQuestion = null;
+  if (!id) return;
+  if (cancelled) {
+    send({ type: "answer", id, answers: [], cancelled: true });
+    return;
+  }
+  const answers = [...questionBody.querySelectorAll(".question-item")].map((item, index) => {
+    const header = item.querySelector("h3")?.textContent ?? "";
+    const selected = [
+      ...item.querySelectorAll(`input[name="question-${index}"]:checked`),
+    ].map((input) => input.value);
+    const custom = item.querySelector(".question-custom")?.value.trim() ?? "";
+    return { header, selected, ...(custom.length > 0 ? { custom } : {}) };
+  });
+  send({ type: "answer", id, answers });
+}
+
 function ensureAssistant() {
   if (currentAssistant === null) {
     currentAssistant = { body: addMessage("assistant", "", true), raw: "" };
@@ -240,21 +303,26 @@ function flushAssistant() {
   if (currentAssistant) renderMarkdown(currentAssistant.body, currentAssistant.raw);
 }
 
+function applyBusy(value) {
+  busy = value;
+  sendButton.disabled = value;
+  stopButton.disabled = !value;
+  if (value) {
+    setStatus("working", "busy");
+  } else if (statusEl.dataset.state === "busy") {
+    setStatus("ready", "ready");
+  }
+}
+
 function startTurn() {
-  busy = true;
-  sendButton.disabled = true;
-  stopButton.disabled = false;
+  applyBusy(true);
   currentAssistant = null;
-  setStatus("working", "busy");
 }
 
 function endTurn() {
   flushAssistant();
-  busy = false;
-  sendButton.disabled = false;
-  stopButton.disabled = true;
+  applyBusy(false);
   currentAssistant = null;
-  setStatus("ready", "ready");
   input.focus();
 }
 
@@ -427,6 +495,7 @@ function handleMessage(message) {
       renderHistory(message.history ?? []);
       renderContext(message.context ?? null);
       showPermission(message.permission ?? null);
+      showQuestion(message.question ?? null);
       if (message.busy === true) startTurn();
       else setStatus("ready", "ready");
       break;
@@ -435,6 +504,12 @@ function handleMessage(message) {
       break;
     case "permission":
       showPermission(message.permission ?? null);
+      break;
+    case "question":
+      showQuestion(message.question ?? null);
+      break;
+    case "busy":
+      applyBusy(message.busy === true);
       break;
     case "context":
       renderContext(message.context ?? null);
@@ -454,14 +529,12 @@ function handleMessage(message) {
     case "session":
       sessionModal.hidden = true;
       permissionModal.hidden = true;
+      showQuestion(null);
       renderMeta(message.info);
       resetTranscript();
       renderHistory(message.history ?? []);
       showPermission(message.permission ?? null);
-      busy = false;
-      sendButton.disabled = false;
-      stopButton.disabled = true;
-      setStatus("ready", "ready");
+      applyBusy(false);
       renderSessionList();
       break;
     case "turn_start":
@@ -475,7 +548,6 @@ function handleMessage(message) {
       break;
     case "error":
       showError(message.message ?? "Something went wrong.");
-      if (busy) endTurn();
       break;
     default:
       break;
@@ -666,6 +738,13 @@ permissionModal.addEventListener("click", (event) => {
   const button = event.target instanceof HTMLElement ? event.target.closest("button[data-choice]") : null;
   if (button) resolvePermission(button.dataset.choice ?? "cancel");
 });
+
+questionForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  submitQuestion(false);
+});
+
+$("question-cancel").addEventListener("click", () => submitQuestion(true));
 
 document.addEventListener("keydown", (event) => {
   if (permissionModal.hidden) return;

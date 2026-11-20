@@ -162,6 +162,7 @@ Open the printed URL. The interface supports:
 - neon glass theme with a grid background, SVG tool icons, and reduced-motion support,
 - Markdown rendering, fenced code blocks, and copy buttons,
 - edit and write diffs in the approval dialog,
+- multiple-choice `AskUserQuestion` dialogs with radio/checkbox options and free-form answers,
 - allow once / always / session / deny / cancel,
 - session list, new session, resume with history, rename, fork, and delete,
 - provider/model switching that keeps the current session,

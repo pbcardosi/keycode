@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Duplex } from "node:stream";
+import type { Question, QuestionResult } from "../contracts/tool.js";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acceptWebSocket, type WsConnection } from "./ws.js";
@@ -34,6 +35,17 @@ export interface RemotePermissionBridge {
   current(): RemotePermission | null;
   subscribe(listener: (permission: RemotePermission | null) => void): () => void;
   resolve(id: string, choice: string): boolean;
+}
+
+export interface RemoteQuestion {
+  id: string;
+  questions: Question[];
+}
+
+export interface RemoteQuestionBridge {
+  current(): RemoteQuestion | null;
+  subscribe(listener: (question: RemoteQuestion | null) => void): () => void;
+  resolve(id: string, result: QuestionResult): boolean;
 }
 
 export interface RemoteSession {
@@ -79,6 +91,7 @@ export interface RemoteServerOptions {
   token?: string | undefined;
   staticDir?: string | undefined;
   permissions?: RemotePermissionBridge | undefined;
+  questions?: RemoteQuestionBridge | undefined;
 }
 
 export interface RemoteServer {
@@ -207,14 +220,22 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
   let context: RemoteSelection | null = null;
   let unsubscribeEvents: (() => void) | null = null;
   let unsubscribePermissions: (() => void) | null = null;
+  let unsubscribeQuestions: (() => void) | null = null;
 
   const broadcast = (payload: unknown): void => {
     const text = JSON.stringify(payload);
     for (const client of clients) client.send(text);
   };
 
+  const setBusy = (value: boolean): void => {
+    if (busy === value) return;
+    busy = value;
+    broadcast({ type: "busy", busy });
+  };
+
   const info = (): RemoteInfo => options.handler.info?.() ?? {};
   const currentPermission = (): RemotePermission | null => options.permissions?.current() ?? null;
+  const currentQuestion = (): RemoteQuestion | null => options.questions?.current() ?? null;
   const withContext = (prompt: string): string =>
     context === null ? prompt : `${formatSelection(context)}\n\n${prompt}`;
 
@@ -346,13 +367,13 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
       res.setHeader("content-type", "text/event-stream");
       res.setHeader("cache-control", "no-cache");
       res.write(`data: ${JSON.stringify({ type: "start" })}\n\n`);
-      busy = true;
+      setBusy(true);
       try {
         const answer = await options.handler.onPrompt(withContext(prompt));
         res.write(`data: ${JSON.stringify({ type: "text", text: answer })}\n\n`);
         res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
       } finally {
-        busy = false;
+        setBusy(false);
       }
       res.end();
       return;
@@ -373,6 +394,12 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
       broadcast({ type: "permission", permission });
     });
   }
+  if (options.questions !== undefined) {
+    const bridge = options.questions;
+    unsubscribeQuestions = bridge.subscribe((question) => {
+      broadcast({ type: "question", question });
+    });
+  }
 
   server.on("upgrade", (req, socket) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
@@ -389,6 +416,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         type: "hello",
         info: info(),
         permission: currentPermission(),
+        question: currentQuestion(),
         history: history(),
         context,
         busy,
@@ -411,6 +439,8 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         model?: string;
         choice?: string;
         selection?: unknown;
+        answers?: unknown;
+        cancelled?: boolean;
       };
       try {
         message = JSON.parse(text) as typeof message;
@@ -429,6 +459,36 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         const resolved = options.permissions?.resolve(message.id, message.choice) ?? false;
         if (!resolved) {
           connection.send(JSON.stringify({ type: "error", message: "permission request is no longer pending" }));
+        }
+        return;
+      }
+
+      if (message.type === "answer" && message.id !== undefined) {
+        const rawAnswers = Array.isArray(message.answers) ? message.answers : [];
+        const answers = rawAnswers.flatMap((entry) => {
+          if (entry === null || typeof entry !== "object") return [];
+          const record = entry as { header?: unknown; selected?: unknown; custom?: unknown };
+          if (typeof record.header !== "string") return [];
+          const selected = Array.isArray(record.selected)
+            ? record.selected.filter((value): value is string => typeof value === "string")
+            : [];
+          return [
+            {
+              header: record.header,
+              selected,
+              ...(typeof record.custom === "string" && record.custom.length > 0
+                ? { custom: record.custom }
+                : {}),
+            },
+          ];
+        });
+        const resolved =
+          options.questions?.resolve(message.id, {
+            answers,
+            ...(message.cancelled === true ? { cancelled: true } : {}),
+          }) ?? false;
+        if (!resolved) {
+          connection.send(JSON.stringify({ type: "error", message: "question is no longer pending" }));
         }
         return;
       }
@@ -491,7 +551,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
           connection.send(JSON.stringify({ type: "error", message: "fork is not available" }));
           return;
         }
-        busy = true;
+        setBusy(true);
         void (async () => {
           try {
             const next =
@@ -511,7 +571,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
               JSON.stringify({ type: "error", message: (error as Error).message || "fork failed" }),
             );
           } finally {
-            busy = false;
+            setBusy(false);
           }
         })();
         return;
@@ -526,7 +586,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
           connection.send(JSON.stringify({ type: "error", message: "model switching is not available" }));
           return;
         }
-        busy = true;
+        setBusy(true);
         void (async () => {
           try {
             const next =
@@ -538,7 +598,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
               JSON.stringify({ type: "error", message: (error as Error).message || "model switch failed" }),
             );
           } finally {
-            busy = false;
+            setBusy(false);
           }
         })();
         return;
@@ -575,7 +635,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
           connection.send(JSON.stringify({ type: "error", message: "Stop the current turn first" }));
           return;
         }
-        busy = true;
+        setBusy(true);
         void (async () => {
           try {
             const next =
@@ -593,7 +653,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
               JSON.stringify({ type: "error", message: (error as Error).message || "could not switch session" }),
             );
           } finally {
-            busy = false;
+            setBusy(false);
           }
         })();
         return;
@@ -605,7 +665,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
           return;
         }
         const prompt = message.prompt ?? "";
-        busy = true;
+        setBusy(true);
         connection.send(JSON.stringify({ type: "turn_start" }));
         void (async () => {
           try {
@@ -620,8 +680,9 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
             connection.send(
               JSON.stringify({ type: "error", message: (error as Error).message || "turn failed" }),
             );
+            connection.send(JSON.stringify({ type: "turn_done" }));
           } finally {
-            busy = false;
+            setBusy(false);
           }
         })();
       }
@@ -637,6 +698,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
       new Promise<void>((resolvePromise) => {
         unsubscribeEvents?.();
         unsubscribePermissions?.();
+        unsubscribeQuestions?.();
         for (const client of clients) client.close();
         clients.clear();
         server.close(() => resolvePromise());

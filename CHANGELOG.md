@@ -42,6 +42,10 @@ First alpha.
 - Neon glass web UI theme: charcoal base, cyan/magenta/lime accents, grid
   background, glass panels, SVG tool icons, glow states, and reduced-motion
   support. Fonts use local stacks with no network requests.
+- Web UI question dialogs for `AskUserQuestion` with radio/checkbox options,
+  free-form answers, and cancellation.
+- Busy-state broadcasts keep the browser and server in sync after errors,
+  aborted turns, and model/session switches.
 - VS Code extension that starts `keycode remote` and opens the shared web UI in
   a Simple Browser tab, with model, permission, and lifecycle settings.
 - VS Code editor context forwarding: active file and selection reach the web UI
