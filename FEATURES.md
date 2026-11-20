@@ -68,7 +68,7 @@ committed to the repository.
 
 | Provider | Install | Base URL | Cost | Notes |
 |---|---|---|---|---|
-| Ollama | https://ollama.com/download | `http://127.0.0.1:11434/v1` | Free | Pull a tool-capable model first, for example `ollama pull qwen3-coder`. |
+| Ollama | https://ollama.com/download | `http://127.0.0.1:11434/v1` | Free | Pull a tool-capable model first, for example `ollama pull gemma4:12b`. |
 | LM Studio | https://lmstudio.ai/ | `http://127.0.0.1:1234/v1` | Free | Enable the local server and load a tool-capable model. |
 | llama.cpp | https://github.com/ggml-org/llama.cpp | `http://127.0.0.1:8080/v1` | Free | Run `llama-server` with a GGUF model that supports tools. |
 
@@ -210,8 +210,8 @@ keycode --provider openrouter --model "qwen/qwen3-coder:free"
 
 ```bash
 ollama serve
-ollama pull qwen3-coder
-keycode --provider ollama --model qwen3-coder
+ollama pull gemma4:12b
+keycode --provider ollama --model gemma4:12b
 ```
 
 ### 8.5 Persistent configuration
@@ -233,7 +233,7 @@ keycode --provider ollama --model qwen3-coder
       "kind": "openai-compatible",
       "baseUrl": "http://127.0.0.1:11434/v1",
       "apiKeyEnv": null,
-      "models": ["qwen3-coder", "llama3.1"]
+      "models": ["gemma4:12b", "llama3.1"]
     }
   }
 }
