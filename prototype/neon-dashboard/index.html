@@ -202,7 +202,8 @@
           </div>
         </header>
 
-        <section class="panel field" aria-labelledby="field-title">
+        <div class="top-row">
+          <section class="panel field" aria-labelledby="field-title">
           <header class="panel-head">
             <div class="panel-heading">
               <h2 id="field-title">Execution field</h2>
@@ -316,6 +317,7 @@
             <span class="mono" id="event-count">0 events</span>
           </footer>
         </section>
+        </div>
 
         <section class="panel chat" aria-labelledby="chat-title">
           <header class="panel-head">
@@ -327,13 +329,14 @@
           </header>
 
           <div class="chat-body" id="chat-body">
+            <p class="chat-start">Session started 14:02</p>
             <article class="message message-user">
               <p class="message-meta">
                 <span class="message-author">You</span>
                 <time datetime="2026-11-20T14:59">14:59</time>
               </p>
               <p class="message-text">
-                Give the execution field and event stream half the height. Let the chat take the rest.
+                Put the execution field and event stream side by side at half width. Make them taller and give the chat the rest.
               </p>
             </article>
             <article class="message message-assistant">
@@ -342,7 +345,7 @@
                 <time datetime="2026-11-20T15:00">15:00</time>
               </p>
               <p class="message-text">
-                Both panels are now half height. The transcript takes the remaining space, and the composer stays pinned below it.
+                The field is on the left and the stream on the right. Both are taller, and the transcript now fills the remaining column.
               </p>
             </article>
           </div>

@@ -1,7 +1,9 @@
 # KeyCode session overview prototype
 
 A static shell for the neon dashboard direction. It is a layout and interaction
-study, not a replacement for the shipped web UI.
+study, not a replacement for the shipped web UI. The activity row places the
+execution field and event stream side by side; the chat panel fills the space
+below it.
 
 ## Run
 

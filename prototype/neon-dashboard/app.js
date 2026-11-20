@@ -182,6 +182,7 @@ function eventRow(event) {
   const title = document.createElement("span");
   title.className = "event-title";
   title.textContent = event.title;
+  title.title = event.title;
 
   const meta = document.createElement("span");
   meta.className = "event-meta";
