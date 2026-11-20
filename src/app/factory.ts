@@ -28,7 +28,10 @@ import {
   type HookConfig,
 } from "../extensions/hooks.js";
 import { collectPluginHooks, enabledPluginDirs } from "../extensions/plugins.js";
-import { AutoMemoryStore } from "../storage/autoMemory.js";
+import { AutoMemoryStore, extractMemory } from "../storage/autoMemory.js";
+import { Notifier, terminalChannel, webhookChannel, type NotificationChannel } from "../notifications/index.js";
+import { OtelExporter } from "../telemetry/otel.js";
+import { telemetryEnabled } from "../privacy/index.js";
 import { projectDir } from "../util/paths.js";
 import { discoverCommands, type CommandDefinition } from "../extensions/commands.js";
 import { discoverSkills, type SkillMetadata } from "../extensions/skills.js";
@@ -47,9 +50,10 @@ import { pathToFileURL } from "node:url";
 import { BudgetGuard, type Pricing } from "../providers/budget.js";
 import { trustStatus, trustWorkspace } from "./trust.js";
 import { buildTrustManifest, type TrustManifest, type TrustState } from "./trustManifest.js";
-import { Agent } from "./agent.js";
+import { Agent, type TurnResult } from "./agent.js";
 import type { Provider } from "../contracts/provider.js";
 import type { Question, QuestionResult, Tool } from "../contracts/tool.js";
+import type { PermissionDecision, PermissionRequest } from "../contracts/tool.js";
 import { McpClient } from "../mcp/client.js";
 import { createMcpTools } from "../mcp/tools.js";
 import type { McpServerSettings } from "../mcp/management.js";
@@ -125,6 +129,7 @@ export interface AgentSetup {
   lsp?: ReturnType<typeof createLspTool> | undefined;
   artifacts?: ReturnType<typeof createArtifactTool> | undefined;
   trust: TrustState;
+  telemetry?: { flush(): Promise<boolean> } | undefined;
 }
 
 function parseMcpServerSettings(
@@ -480,6 +485,31 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   });
   warnings.push(...memory.warnings);
   const autoMemory = new AutoMemoryStore(join(projectDir(home, cwd), "memory.json"));
+  const notificationChannels: NotificationChannel[] = [];
+  if (settings.notifications?.enabled !== false && settings.notifications !== undefined) {
+    if (typeof settings.notifications.webhook === "string") {
+      notificationChannels.push(webhookChannel(settings.notifications.webhook, options.fetchImpl ?? fetch));
+    }
+    if (settings.notifications.terminal === true) {
+      notificationChannels.push(terminalChannel((text) => process.stderr.write(text)));
+    }
+  }
+  const notifier =
+    notificationChannels.length === 0
+      ? undefined
+      : new Notifier({
+          channels: notificationChannels,
+          ...(settings.notifications?.dedupeMs === undefined
+            ? {}
+            : { dedupeMs: settings.notifications.dedupeMs }),
+          ...(settings.notifications?.idleThresholdMs === undefined
+            ? {}
+            : { idleThresholdMs: settings.notifications.idleThresholdMs }),
+        });
+  const otelExporter =
+    settings.otel !== undefined && telemetryEnabled(home, env)
+      ? new OtelExporter(settings.otel, options.fetchImpl ?? fetch)
+      : undefined;
   const recalled = autoMemory.recall();
   const memoryText = [
     memory.text,
@@ -517,12 +547,35 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     ...(options.allowRules ?? []).map((raw) => parseRule(raw, "session", "allow")),
   ];
   const audit = new AuditLog(home);
+  const permissionPrompter =
+    options.prompter === undefined || notifier === undefined
+      ? options.prompter
+      : {
+          ask: async (request: PermissionRequest, decision: PermissionDecision) => {
+            void notifier
+              .notify(
+                "permission_required",
+                `${request.tool} needs approval: ${decision.reason}`,
+              )
+              .catch(() => undefined);
+            return await options.prompter!.ask(request, decision);
+          },
+        };
+  const askQuestions =
+    options.askQuestions === undefined || notifier === undefined
+      ? options.askQuestions
+      : async (items: Question[]) => {
+          void notifier
+            .notify("input_needed", items[0]?.question ?? "Input needed")
+            .catch(() => undefined);
+          return await options.askQuestions!(items);
+        };
   const permissionService = new PermissionService({
     mode,
     rules,
     cwd,
     roots,
-    ...(options.prompter === undefined ? {} : { prompter: options.prompter }),
+    ...(permissionPrompter === undefined ? {} : { prompter: permissionPrompter }),
     audit,
     sessionId,
     managedDenyTools: managedDeniedTools(home, env),
@@ -574,7 +627,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
       sessionId: childHeader.id,
       managedDenyTools: managedDeniedTools(home, env),
       trusted,
-      ...(options.prompter === undefined ? {} : { prompter: options.prompter }),
+      ...(permissionPrompter === undefined ? {} : { prompter: permissionPrompter }),
     });
     const childSystemPrompt =
       spec.body === undefined
@@ -618,6 +671,73 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     return { sessionId: childHeader.id, text: childResult.text };
   };
 
+  const memoryEvery = settings.autoMemoryEvery ?? 5;
+  const memoryEnabled =
+    settings.autoMemory !== false && options.bare !== true && options.safeMode !== true;
+  let completedTurns = 0;
+  const onTurnComplete = async (result: TurnResult, signal: AbortSignal): Promise<void> => {
+    completedTurns += 1;
+    if (notifier !== undefined) {
+      void notifier
+        .notify(
+          "task_complete",
+          result.text.trim().length > 0 ? result.text.slice(0, 200) : "Turn complete",
+        )
+        .catch(() => undefined);
+    }
+    if (otelExporter !== undefined) {
+      const attributes = { provider: providerId, model, status: result.stopReason };
+      otelExporter.record({ name: "keycode.turns", value: 1, attributes });
+      otelExporter.record({
+        name: "keycode.tokens.input",
+        value: result.usage.inputTokens,
+        unit: "token",
+        attributes,
+      });
+      otelExporter.record({
+        name: "keycode.tokens.output",
+        value: result.usage.outputTokens,
+        unit: "token",
+        attributes,
+      });
+      otelExporter.record({
+        name: "keycode.cost.usd",
+        value: result.costUsd,
+        unit: "USD",
+        attributes,
+      });
+      otelExporter.record({
+        name: "keycode.tool_calls",
+        value: result.toolCalls,
+        attributes,
+      });
+      void otelExporter.flush();
+    }
+    if (
+      !memoryEnabled ||
+      signal.aborted ||
+      autoMemory.paused ||
+      completedTurns % memoryEvery !== 0
+    ) {
+      return;
+    }
+    try {
+      const view = store.load(sessionId);
+      const memoryMessages = view.messages
+        .filter((message) => message.content.every((block) => block.type === "text"))
+        .slice(-30);
+      const fact = await extractMemory(
+        resolved.provider,
+        model,
+        memoryMessages,
+        signal,
+      );
+      if (fact !== null && !signal.aborted) autoMemory.add(fact);
+    } catch (error) {
+      logger.warn("Auto-memory extraction failed", { error: (error as Error).message });
+    }
+  };
+
   const agent = new Agent({
     sessionId,
     store,
@@ -639,9 +759,10 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     ...(options.effort === undefined ? {} : { effort: options.effort }),
     ...(fallback === undefined ? {} : { fallback }),
     checkpointStore: checkpoints,
-    ...(options.askQuestions === undefined ? {} : { askQuestions: options.askQuestions }),
+    ...(askQuestions === undefined ? {} : { askQuestions }),
     ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }),
     ...(hooks === undefined ? {} : { hooks }),
+    onTurnComplete,
     logger,
   });
 
@@ -680,6 +801,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
       items: manifest.items,
       fingerprint: manifest.fingerprint,
     },
+    ...(otelExporter === undefined ? {} : { telemetry: { flush: () => otelExporter.flush() } }),
   };
 }
 

@@ -67,6 +67,25 @@ export const ArtifactsSchema = z
   })
   .passthrough();
 
+export const NotificationsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    webhook: z.string().optional(),
+    terminal: z.boolean().optional(),
+    dedupeMs: z.number().int().nonnegative().optional(),
+    idleThresholdMs: z.number().int().positive().optional(),
+  })
+  .passthrough();
+
+export const OtelSchema = z
+  .object({
+    endpoint: z.string().min(1),
+    headers: z.record(z.string(), z.string()).optional(),
+    serviceName: z.string().optional(),
+    sampleRate: z.number().min(0).max(1).optional(),
+  })
+  .passthrough();
+
 export const SettingsSchema = z
   .object({
     $schema: z.string().optional(),
@@ -84,6 +103,9 @@ export const SettingsSchema = z
     browser: BrowserSchema.optional(),
     artifacts: ArtifactsSchema.optional(),
     codeMode: z.boolean().optional(),
+    autoMemoryEvery: z.number().int().positive().max(100).optional(),
+    notifications: NotificationsSchema.optional(),
+    otel: OtelSchema.optional(),
     statusLine: z
       .union([z.string(), z.object({ type: z.string(), command: z.string() })])
       .nullable()

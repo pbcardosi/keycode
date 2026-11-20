@@ -70,6 +70,7 @@ export interface AgentOptions {
   askQuestions?: ((questions: Question[]) => Promise<QuestionResult>) | undefined;
   onEvent?: ((event: AgentEvent) => void) | undefined;
   hooks?: HookDispatcher | undefined;
+  onTurnComplete?: ((result: TurnResult, signal: AbortSignal) => Promise<void> | void) | undefined;
 }
 
 export interface TurnResult {
@@ -673,8 +674,7 @@ export class Agent {
       cwd: this.options.cwd,
       stop_reason: stopReason,
     });
-    this.emit({ type: "done", stopReason });
-    return {
+    const turnResult: TurnResult = {
       text: allText,
       usage: turnUsage,
       costUsd: this.sessionCost - turnCostStart,
@@ -682,6 +682,13 @@ export class Agent {
       stopReason,
       interrupted,
     };
+    try {
+      await this.options.onTurnComplete?.(turnResult, signal);
+    } catch (error) {
+      this.options.logger?.warn("onTurnComplete failed", { error: (error as Error).message });
+    }
+    this.emit({ type: "done", stopReason });
+    return turnResult;
   }
 
   async sideQuestion(question: string, signal: AbortSignal): Promise<string> {

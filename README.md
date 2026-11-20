@@ -318,6 +318,46 @@ Untrusted project settings are ignored.
 
 ---
 
+## Runtime operations
+
+**Auto-memory** extraction is scheduled after every fifth completed turn by
+default. Change it with `autoMemoryEvery`, or disable it with
+`"autoMemory": false`. A fact is stored only when the model returns a durable
+sentence; paused memory skips extraction and recall.
+
+**Notifications** support a webhook and optional terminal OSC/bell:
+
+```json
+{
+  "notifications": {
+    "webhook": "http://127.0.0.1:9999/notify",
+    "terminal": false,
+    "dedupeMs": 5000
+  }
+}
+```
+
+Events include `permission_required`, `input_needed`, and `task_complete`.
+Webhook payloads contain `{ event, text, timestamp }`.
+
+**OpenTelemetry** requires explicit privacy consent:
+
+```json
+{
+  "otel": {
+    "endpoint": "http://127.0.0.1:4318/v1/metrics",
+    "serviceName": "keycode",
+    "sampleRate": 1
+  }
+}
+```
+
+Metrics are emitted for turns, input/output tokens, cost, and tool-call counts.
+`telemetryEnabled()` still honors `privacy.json`, `KEYCODE_TELEMETRY=0`, and
+`DO_NOT_TRACK=1`; without consent, no metrics are recorded.
+
+---
+
 ## Security checks
 
 - **WebFetch** resolves each hostname before requesting it and blocks results in

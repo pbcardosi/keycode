@@ -25,7 +25,7 @@ behavior claims came from. `AGENTS.md` defines process and safety rules.
 
 ## 2. Scope
 
-`keycode` is a terminal coding agent with:
+`KeyCode` is a terminal coding agent with:
 
 - an interactive TUI and a headless mode;
 - a provider-neutral model layer with free and local presets;
@@ -516,7 +516,7 @@ The `Part` column is the build-plan part.
 |---|---|---|---|---|
 | M1 | CLAUDE.md hierarchy | CLAUDE.md loads from user, project, and local scopes plus parent directories, with documented precedence and size limits. | T-M1: Fixtures at three levels assert assembled prompt order, deduplication, and size truncation. | 1 |
 | M2 | Imports | `@path` imports in CLAUDE.md resolve relative to the file, support recursion, detect cycles, and ignore imports inside code fences. | T-M2: A imports B and B imports A; assert a cycle warning and that content appears once; a fenced import is ignored. | 1 |
-| M3 | Auto-memory | Auto-memory extracts durable facts after selected turns, stores them outside the project, recalls relevant memories, and supports pause and manual editing. | T-M3: A fake provider proposes a memory; assert storage, recall in a new session, and that pause disables both. | 2 |
+| M3 | Auto-memory | Auto-memory extracts durable facts after selected turns every `autoMemoryEvery` turns, stores them outside the project, recalls relevant memories, and supports pause and manual editing. | T-M3: A fake provider proposes a memory; assert storage, recall in a new session, pause disables both, and a completed turn triggers extraction. | 2 |
 | M4 | System prompt assembly | The system prompt assembles base instructions, tool docs, memory, environment, and git status; `--system-prompt`, `--append-system-prompt`, and snapshot on/off are supported. | T-M4: A custom prompt replaces the base, append adds to it, and a resumed session reuses the snapshot until compaction. | 1 |
 | M5 | Additional directories | `--add-dir`, `/add-dir`, and `/cd` extend the workspace; permissions and trust apply to added roots; path display updates. | T-M5: Read a file outside cwd before and after add-dir; assert denial then success, and assert `/cd` changes the session cwd. | 1 |
 | M6 | Ignore-aware discovery | File discovery respects `.gitignore`, `.ignore`, and global excludes; hidden files and large files have explicit policies; symlink loops are bounded. | T-M6: A fixture with ignored files asserts Glob and Grep exclude them, `--no-ignore` includes them, and a symlink loop terminates. | 1 |
@@ -560,7 +560,7 @@ The `Part` column is the build-plan part.
 |---|---|---|---|---|
 | U1 | TUI renderer | The TUI renders streaming markdown, code highlighting, diffs, tool rows, spinners, and scrollback in default and fullscreen modes. | T-U1: Render a fixture transcript and assert markdown, diff, tool status, and spinner states in the snapshot. | 1 |
 | U2 | Input and completion | Input supports multiline, history, Ctrl+R search, `@file` completion, a slash-command menu, image paste, external editor, and draft persistence. | T-U2: Type multiline text, search history, complete a file, and submit; assert the payload and restored draft. | 1 |
-| U3 | Notifications | Notifications fire for idle, permission required, task complete, and input needed via terminal bell or OSC, desktop notification, or webhook, with deduplication. | T-U3: A fake notifier triggers idle and permission events; assert the events, threshold, and deduplication. | 3 |
+| U3 | Notifications | Notifications fire for idle, permission required, task complete, and input needed via terminal bell or OSC, desktop notification, or webhook, with deduplication. Runtime hooks send permission, question, and task-complete events. | T-U3: A fake notifier triggers idle and permission events; assert the events, threshold, and deduplication; a real turn sends a task-complete webhook. | 3 |
 | U4 | Accessibility | Accessibility mode provides flat text, no decorative borders or animations, reduced motion, high contrast, and screen-reader labels. | T-U4: Run with `--ax-screen-reader` and assert no ANSI borders or animations and that labels are present. | 2 |
 | U5 | Status footer | The footer shows model, tokens, cost, git branch, PR badge, background tasks, and progress, and updates without corrupting scrollback. | T-U5: In a fake git repo, assert the footer fields and progress updates after a tool call. | 1 |
 | U6 | Onboarding and help | First-run onboarding covers theme, trust, and provider choice; `/help` and `?` list commands; tips and `/release-notes` render. | T-U6: A fresh `KEYCODE_HOME` shows onboarding; `/help` lists all commands; release notes render. | 2 |
@@ -574,7 +574,7 @@ The `Part` column is the build-plan part.
 | O1 | Settings hierarchy | Settings load from user, project, local, and managed layers with JSON Schema validation, env interpolation, precedence, and hot reload; invalid files warn and are ignored. | T-O1: The same key at four layers resolves to managed; an invalid file warns and is ignored; a hot reload applies a valid change. | 1 |
 | O2 | Managed policy | Managed policy supports per-OS paths, policy gates for tools, providers, telemetry, and MCP, and cannot be overridden by user settings. | T-O2: A managed file disables Bash; the tool is absent and cannot be enabled by user or project settings. | 2 |
 | O3 | Privacy | Privacy settings provide first-run consent, `/privacy-settings`, opt-out environment variables, local-only defaults, and data export and deletion. | T-O3: Opt out, run a turn, and assert no telemetry events; export and delete remove the expected data. | 2 |
-| O4 | OpenTelemetry | OTel exports metrics, logs, and traces over OTLP HTTP or gRPC with resource attributes, sampling, and redaction. | T-O4: A fake OTLP collector receives token, cost, and tool-latency metrics with the expected attributes and no secrets. | 2 |
+| O4 | OpenTelemetry | OTel exports metrics, logs, and traces over OTLP HTTP or gRPC with resource attributes, sampling, and redaction. Runtime turns export turn, token, cost, and tool-count metrics when privacy consent is granted. | T-O4: A fake OTLP collector receives token, cost, and tool-latency metrics with the expected attributes and no secrets; a real agent turn exports turn metrics. | 2 |
 | O5 | Gateway | The gateway is a local reverse proxy that injects provider keys, authenticates clients, enforces rate limits, audits requests, and blocks SSRF. | T-O5: The proxy routes to a fake upstream, injects the key, rejects an unauthorized client, and blocks a private-IP target. | 3 |
 | O6 | Cross-platform | Windows, macOS, Linux, and WSL have correct path handling, shell selection, terminal capabilities, Unicode width, and CRLF behavior. | T-O6: A CI matrix runs path, shell, and width fixtures on all four platforms and asserts platform-specific expectations. | 3 |
 

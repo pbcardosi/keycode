@@ -453,6 +453,7 @@ export function registerExtraCommands(program: Command): void {
         controller.abort();
         setup.lsp?.stop();
         setup.artifacts?.stop();
+        await setup.telemetry?.flush();
         await Promise.all(setup.mcpClients.map((client) => client.close()));
         setup = await createAgentSetup(buildOptions(overrides));
         currentProvider = setup.providerId;
@@ -633,6 +634,7 @@ export function registerExtraCommands(program: Command): void {
         unsubscribeAgent();
         setup.lsp?.stop();
         setup.artifacts?.stop();
+        await setup.telemetry?.flush();
         await Promise.all(setup.mcpClients.map((client) => client.close()));
         await server.close();
       });

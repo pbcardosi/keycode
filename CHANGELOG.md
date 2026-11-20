@@ -57,6 +57,9 @@ First alpha.
 - Workspace trust review in the TUI and web UI: project permissions, hooks, MCP,
   LSP, browser drivers, env keys, and customization files are listed before
   approval, with a fingerprint that re-prompts when they change.
+- Runtime auto-memory extraction every fifth turn (`autoMemoryEvery`), webhook
+  and terminal notifications for permissions, questions, and turn completion,
+  and OTLP turn/token/cost/tool-count metrics gated by privacy consent.
 - VS Code extension that starts `keycode remote` and opens the shared web UI in
   a Simple Browser tab, with model, permission, and lifecycle settings.
 - VS Code editor context forwarding: active file and selection reach the web UI
