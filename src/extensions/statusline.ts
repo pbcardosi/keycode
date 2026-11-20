@@ -26,10 +26,14 @@ export async function runStatusLine(
   payload: unknown,
   options: StatusLineOptions,
 ): Promise<StatusLineResult> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(options.env ?? {})) {
+    if (typeof value === "string") env[key] = value;
+  }
   const result = await runCommand({
     command,
     cwd: options.cwd,
-    env: options.env ?? {},
+    env,
     stdin: JSON.stringify(payload),
     timeoutMs: options.timeoutMs ?? 5_000,
   });

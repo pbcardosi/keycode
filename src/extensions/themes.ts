@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 export interface Theme {
@@ -109,7 +109,7 @@ export function discoverThemes(options: LoadKeybindingsOptions): Theme[] {
   candidates.push({ path: join(options.home, ".keycode", "themes"), source: "user" });
   for (const candidate of candidates) {
     if (!existsSync(candidate.path)) continue;
-    for (const entry of require("node:fs").readdirSync(candidate.path) as string[]) {
+    for (const entry of readdirSync(candidate.path)) {
       if (!entry.endsWith(".json")) continue;
       try {
         const parsed = JSON.parse(readFileSync(join(candidate.path, entry), "utf8")) as {

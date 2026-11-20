@@ -44,6 +44,7 @@ export const COMMAND_HELP: Array<[string, string]> = [
   ["/permissions", "Show permission mode and rules"],
   ["/skills", "List available skills"],
   ["/agents", "List available subagents"],
+  ["/output-style [name]", "List or select an output style"],
   ["/memory", "Show loaded memory files"],
   ["/status", "Show provider, model, and session"],
   ["/exit", "Exit keycode"],
@@ -246,6 +247,19 @@ export async function executeCommand(line: string, ctx: CommandContext): Promise
               .join("\n"),
       );
       return { handled: true };
+    case "output-style": {
+      if (args.length === 0) {
+        out(
+          setup.styles
+            .map((style) => `${style.name === setup.outputStyle ? "*" : " "} ${style.name}  ${style.description}`)
+            .join("\n"),
+        );
+      } else {
+        const style = setup.styles.find((candidate) => candidate.name === args);
+        out(style ? `output style: ${style.name}` : `Unknown output style: ${args}`);
+      }
+      return { handled: true };
+    }
     case "permissions":
       out(`mode: ${setup.permissionMode}`);
       return { handled: true };

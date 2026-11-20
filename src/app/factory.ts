@@ -23,6 +23,7 @@ import { CommandHookDispatcher, parseHookConfig, type HookConfig } from "../exte
 import { discoverCommands, type CommandDefinition } from "../extensions/commands.js";
 import { discoverSkills, type SkillMetadata } from "../extensions/skills.js";
 import { discoverAgents, type AgentDefinition } from "../extensions/customAgents.js";
+import { discoverStyles, findStyle, type OutputStyle } from "../extensions/styles.js";
 import { createSkillTool } from "../tools/skill.js";
 import { createAgentTool } from "../tools/agent.js";
 import { narrowPermissionMode, type SubagentRunner } from "./subagent.js";
@@ -67,6 +68,7 @@ export interface AgentSetupOptions {
   trust?: boolean | undefined;
   autoCompactThreshold?: number | undefined;
   hooks?: HookConfig | undefined;
+  outputStyle?: string | undefined;
 }
 
 export interface AgentSetup {
@@ -85,6 +87,8 @@ export interface AgentSetup {
   commands: CommandDefinition[];
   skills: SkillMetadata[];
   agents: AgentDefinition[];
+  styles: OutputStyle[];
+  outputStyle: string;
 }
 
 function displayProviderAuthError(): KeycodeError {
@@ -233,6 +237,9 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   const view = store.load(sessionId);
   const skills = discoverSkills({ cwd, home, trusted });
   const agentDefinitions = discoverAgents({ cwd, home, trusted });
+  const styles = discoverStyles({ cwd, home, trusted });
+  const styleName = options.outputStyle ?? settings.outputStyle ?? "default";
+  const activeStyle = findStyle(styles, styleName);
   let subagentRunner: SubagentRunner | undefined;
   const baseTools = options.tools ?? createCoreTools();
   const withExtensions = baseTools.some((tool) => tool.name === "Skill")
@@ -262,7 +269,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     tools: specs,
     ...(options.systemPrompt === undefined ? {} : { basePrompt: options.systemPrompt }),
     ...(options.appendSystemPrompt === undefined ? {} : { appendPrompt: options.appendSystemPrompt }),
-    ...(settings.outputStyle === undefined ? {} : { outputStyle: settings.outputStyle }),
+    ...(activeStyle?.body ? { outputStyle: activeStyle.body } : {}),
   };
   const buildPrompt = (): string => buildSystemPrompt(promptOptions);
 
@@ -419,6 +426,8 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     commands,
     skills,
     agents: agentDefinitions,
+    styles,
+    outputStyle: activeStyle?.name ?? "default",
   };
 }
 
