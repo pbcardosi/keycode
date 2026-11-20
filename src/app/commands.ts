@@ -51,7 +51,7 @@ export const COMMAND_HELP: Array<[string, string]> = [
   ["/status", "Show provider, model, and session"],
   ["/privacy-settings [on|off]", "Show or change privacy and telemetry"],
   ["/release-notes", "Show release notes"],
-  ["/exit", "Exit keycode"],
+  ["/exit", "Exit KeyCode"],
 ];
 
 function usageLine(agent: Agent): string {
@@ -194,7 +194,7 @@ export async function executeCommand(line: string, ctx: CommandContext): Promise
         setup.store.cwd,
         args.length > 0
           ? args
-          : `keycode-session-${setup.sessionId.slice(0, 8)}.${format === "json" ? "json" : "md"}`,
+          : `KeyCode-session-${setup.sessionId.slice(0, 8)}.${format === "json" ? "json" : "md"}`,
       );
       writeFileSync(path, format === "json" ? exportJson(view) : exportMarkdown(view));
       out(`Exported to ${path}`);

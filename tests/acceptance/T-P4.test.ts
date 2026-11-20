@@ -20,7 +20,7 @@ describe("T-P4: free hosted presets resolve offline", () => {
 
   it("exposes openrouter headers and the free-model convention", () => {
     expect(PRESETS.openrouter?.headers).toEqual(
-      expect.objectContaining({ "X-Title": "keycode", "HTTP-Referer": expect.any(String) }),
+      expect.objectContaining({ "X-Title": "KeyCode", "HTTP-Referer": expect.any(String) }),
     );
   });
 

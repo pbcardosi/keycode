@@ -67,7 +67,7 @@ export async function postIssueComment(options: {
         authorization: `Bearer ${options.token}`,
         accept: "application/vnd.github+json",
         "content-type": "application/json",
-        "user-agent": "keycode",
+        "user-agent": "KeyCode",
       },
       body: JSON.stringify(buildCommentPayload(options.body)),
     },
@@ -76,7 +76,7 @@ export async function postIssueComment(options: {
 }
 
 export const GITHUB_WORKFLOW_TEMPLATE = [
-  "name: keycode",
+  "name: KeyCode",
   "on:",
   "  issue_comment:",
   "    types: [created]",

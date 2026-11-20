@@ -98,7 +98,7 @@ function hideEmpty() {
 function addMessage(role, text, markdown = false) {
   hideEmpty();
   const wrap = element("div", `message ${role}`);
-  wrap.appendChild(element("div", "who", role === "user" ? "you" : "keycode"));
+  wrap.appendChild(element("div", "who", role === "user" ? "you" : "KeyCode"));
   const body = element("div", markdown ? "body markdown" : "body");
   if (markdown) renderMarkdown(body, text);
   else body.textContent = text;

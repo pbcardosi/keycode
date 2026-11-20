@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**Project:** keycode — a free, local-first, bring-your-own-key coding agent.
+**Project:** KeyCode — a free, local-first, bring-your-own-key coding agent.
 **Phase:** specification. No runtime code exists yet.
 **Audience:** coding agents and human contributors.
 
@@ -10,7 +10,7 @@
 
 Build a free, local-first coding agent that reproduces the observable workflow of
 Claude Code v2.1.322 without using Anthropic's proprietary source, prompts, assets,
-or hosted services. The product is **keycode**.
+or hosted services. The product is **KeyCode**.
 
 "Free" means: no subscription, no required Anthropic account, no paywalled
 features, and first-class support for free-tier API keys and local models.
@@ -44,7 +44,7 @@ behavior to fill a gap.
   UI copy, icons, assets, or documentation text from Claude Code.
 - **MUST NOT** commit the `claude.exe` binary, extracted modules, decompiled
   output, or screenshots of proprietary UI.
-- **MUST** use original names, copy, and visual design. `keycode` is not
+- **MUST** use original names, copy, and visual design. `KeyCode` is not
   affiliated with Anthropic.
 - **MAY** read `EVIDENCE.md` and public docs to understand behavior.
 - **MAY** use the `.claude/` directory format for compatibility, but the

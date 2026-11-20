@@ -12,7 +12,7 @@ describe("T-M4: system prompt assembly", () => {
       tools: [{ name: "Bash", description: "run things", inputSchema: { type: "object" } }],
       git: { branch: "main", status: " M file.txt" },
     });
-    expect(prompt).toContain("You are keycode");
+    expect(prompt).toContain("You are KeyCode");
     expect(prompt).toContain("# Available tools");
     expect(prompt).toContain("- Bash: run things");
     expect(prompt).toContain("# Project memory");
@@ -33,7 +33,7 @@ describe("T-M4: system prompt assembly", () => {
       basePrompt: "custom-base-prompt",
     });
     expect(custom).toContain("custom-base-prompt");
-    expect(custom).not.toContain("You are keycode");
+    expect(custom).not.toContain("You are KeyCode");
 
     const appended = buildSystemPrompt({
       cwd: makeWorkspace(),

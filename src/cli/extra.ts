@@ -968,7 +968,7 @@ export function registerExtraCommands(program: Command): void {
     .command("notify")
     .description("Send a test notification")
     .option("--event <event>", "idle, permission_required, task_complete, or input_needed", "idle")
-    .option("--text <text>", "notification text", "keycode notification")
+    .option("--text <text>", "notification text", "KeyCode notification")
     .option("--webhook <url>", "webhook URL")
     .option("--json", "emit JSON")
     .action(async (...args: unknown[]) => {
@@ -988,7 +988,7 @@ export function registerExtraCommands(program: Command): void {
       const notifier = new Notifier({ channels });
       const sent = await notifier.notify(
         options.event as "idle" | "permission_required" | "task_complete" | "input_needed",
-        typeof options.text === "string" ? options.text : "keycode notification",
+        typeof options.text === "string" ? options.text : "KeyCode notification",
       );
       emit({ sent }, options.json);
     });

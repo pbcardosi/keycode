@@ -289,7 +289,7 @@ Provider paths observed:
 - `apiKeyHelper` with a TTL.
 
 The binary contains extensive Anthropic account, plan, billing, and cloud
-session logic. That logic is out of scope for keycode and is replaced by free
+session logic. That logic is out of scope for KeyCode and is replaced by free
 BYOK providers.
 
 ### 4.9 Session, memory, and context
@@ -332,7 +332,7 @@ Observed behavior:
 - 242 non-JS modules (native addons, assets, and other payloads) were not
   analyzed.
 - Internal feature flags (`tengu_*`) were counted but not exhaustively mapped.
-  They are implementation details and are not part of the keycode spec.
+  They are implementation details and are not part of the KeyCode spec.
 - Exact prompt text and UI copy were not copied and are not reproduced.
 - No runtime behavior was tested against a live Anthropic account.
 - Free-tier limits and model names change; `FEATURES.md` treats them as
@@ -358,7 +358,7 @@ the installed version, and the spec notes the difference.
 
 The extracted modules were used to enumerate features and observe behavior.
 They were not copied into this repository, and no proprietary prompt, string,
-icon, or asset is reproduced. `keycode` is an independent implementation with
+icon, or asset is reproduced. `KeyCode` is an independent implementation with
 its own architecture, copy, and UI.
 
 The temporary extraction directory is outside the repository and must be

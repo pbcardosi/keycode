@@ -300,7 +300,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
 
     if (url.pathname === "/" && req.method === "GET" && options.staticDir === undefined) {
       res.setHeader("content-type", "text/html; charset=utf-8");
-      res.end("<!doctype html><title>keycode remote</title><h1>keycode remote control</h1>");
+      res.end("<!doctype html><title>KeyCode remote</title><h1>KeyCode remote control</h1>");
       return;
     }
 

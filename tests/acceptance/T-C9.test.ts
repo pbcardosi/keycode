@@ -21,7 +21,7 @@ describe("T-C9: Transcript actions", () => {
     });
     expect(md.handled).toBe(true);
     expect(existsSync(join(ws, "transcript.md"))).toBe(true);
-    expect(readFileSync(join(ws, "transcript.md"), "utf8")).toContain("keycode session");
+    expect(readFileSync(join(ws, "transcript.md"), "utf8")).toContain("KeyCode session");
 
     const jsonOut: string[] = [];
     const json = await executeCommand("/export transcript.json", {

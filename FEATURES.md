@@ -1,6 +1,6 @@
 # FEATURES.md
 
-**Product:** keycode — a free, local-first, bring-your-own-key coding agent.
+**Product:** KeyCode — a free, local-first, bring-your-own-key coding agent.
 **Version target:** behavior parity with Claude Code v2.1.322, reimplemented
 clean-room.
 **Status:** specification.
@@ -13,7 +13,7 @@ catalog, one acceptance test per feature, and the three-part build plan live in
 
 ## 1. What we are building
 
-`keycode` is a terminal coding agent that can:
+`KeyCode` is a terminal coding agent that can:
 
 - read, search, edit, and run code in a repository;
 - hold a streaming conversation with a model;
@@ -43,7 +43,7 @@ Anthropic account.
 | Open source | Apache-2.0, no contributor license agreement, no proprietary dependencies. |
 
 **Non-negotiable:** if a feature only works with a paid provider, it is not a
-keycode feature. It is an optional adapter and must be documented as such.
+KeyCode feature. It is an optional adapter and must be documented as such.
 
 ---
 
@@ -84,10 +84,10 @@ committed to the repository.
 ### 3.4 Free-tier caveats
 
 Free tiers change without notice. Quotas, model names, and tool-calling support
-are controlled by the provider. `keycode` treats provider presets as editable
+are controlled by the provider. `KeyCode` treats provider presets as editable
 data, so a user can override the base URL, model, headers, and limits.
 
-`keycode` will never:
+`KeyCode` will never:
 
 - bundle a shared key;
 - proxy requests through a project-operated key;
@@ -147,7 +147,7 @@ Claude Code ships some capabilities that depend on Anthropic-hosted
 infrastructure. We either build a local equivalent, make it optional, or
 explicitly skip it.
 
-| Claude Code capability | keycode decision | Notes |
+| Claude Code capability | KeyCode decision | Notes |
 |---|---|---|
 | Anthropic OAuth, plans, billing, usage credits | Skip | Not part of a free BYOK product. |
 | Anthropic API adapter | Optional | For users who already have a key. |
@@ -179,7 +179,7 @@ explicitly skip it.
 - Guaranteeing identical model output or identical UI.
 - Supporting every Claude Code internal feature flag.
 - A Windows sandbox with macOS Seatbelt parity; document the gap instead.
-- Shipping a model. `keycode` is a client, not a model provider.
+- Shipping a model. `KeyCode` is a client, not a model provider.
 
 ---
 

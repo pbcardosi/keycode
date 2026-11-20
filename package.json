@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A free, local-first, bring-your-own-key coding agent.",
+  "description": "KeyCode — a free, local-first, bring-your-own-key coding agent.",
   "license": "Apache-2.0",
   "files": [
     "dist",

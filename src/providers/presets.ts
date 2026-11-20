@@ -64,7 +64,7 @@ export const PRESETS: Record<string, ProviderPreset> = {
     apiKeyEnv: "OPENROUTER_API_KEY",
     defaultModel: "qwen/qwen3-coder:free",
     models: ["qwen/qwen3-coder:free", "deepseek/deepseek-r1:free"],
-    headers: { "HTTP-Referer": "https://github.com/keycode", "X-Title": "keycode" },
+    headers: { "HTTP-Referer": "https://github.com/keycode", "X-Title": "KeyCode" },
     contextWindow: 128_000,
     maxOutputTokens: 32_768,
     capabilities: { ...ALL, jsonSchema: false },

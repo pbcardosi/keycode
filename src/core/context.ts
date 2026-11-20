@@ -5,7 +5,7 @@ import { estimateTokens } from "../util/text.js";
 import { shortHash } from "../util/ids.js";
 
 export const BASE_PROMPT = [
-  "You are keycode, a coding agent running in a terminal.",
+  "You are KeyCode, a coding agent running in a terminal.",
   "Work directly in the user's repository. Read before you edit. Prefer small, verifiable changes.",
   "Never repeat an identical edit or write. After a successful edit, verify with Read and then stop; do not re-apply a change that is already present.",
   "Use the provided tools to inspect, search, edit, and test code. Never invent file contents.",

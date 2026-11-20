@@ -78,6 +78,6 @@ export class Notifier {
     }
     if (now - this.idleSince < (this.options.idleThresholdMs ?? 30_000)) return false;
     this.idleSince = now;
-    return await this.notify("idle", "keycode is idle");
+    return await this.notify("idle", "KeyCode is idle");
   }
 }

@@ -1,13 +1,13 @@
-# keycode for VS Code
+# KeyCode for VS Code
 
-This extension opens the keycode web UI in a VS Code editor tab. It reuses the
+This extension opens the KeyCode web UI in a VS Code editor tab. It reuses the
 same frontend as `keycode remote`, so streaming, tools, diffs, approvals,
 sessions, Markdown, and model switching are all available unchanged.
 
 ## Requirements
 
 - VS Code 1.85 or newer.
-- `keycode` installed and on `PATH`. The npm package is not published yet, so
+- The `keycode` CLI installed and on `PATH`. The npm package is not published yet, so
   build and install the tarball from the repository first:
 
   ```bash
@@ -20,7 +20,7 @@ sessions, Markdown, and model switching are all available unchanged.
 
 ## Use
 
-1. Run **keycode: Open Chat** from the Command Palette.
+1. Run **KeyCode: Open Chat** from the Command Palette.
 2. The extension starts `keycode remote --permission-mode manual` in the first
    workspace folder and opens the printed URL in a **Simple Browser** tab.
 3. Use the chat normally. Approvals appear in the panel.
@@ -46,7 +46,7 @@ With `keycode.forwardSelection` enabled (the default), the extension sends:
 - the active file path, and
 - the selected text with 1-based start/end lines, when there is a selection.
 
-The keycode server shows the context above the composer and prepends it to the
+The KeyCode server shows the context above the composer and prepends it to the
 next prompt as data:
 
 ```text
@@ -64,12 +64,12 @@ selection change, or immediately when you reopen the chat.
 
 Commands:
 
-- **keycode: Open Chat**
-- **keycode: Restart Server**
-- **keycode: Stop Server**
-- **keycode: Open in Browser**
-- **keycode: Copy Pairing Token**
-- **keycode: Show Log**
+- **KeyCode: Open Chat**
+- **KeyCode: Restart Server**
+- **KeyCode: Stop Server**
+- **KeyCode: Open in Browser**
+- **KeyCode: Copy Pairing Token**
+- **KeyCode: Show Log**
 
 Settings:
 
@@ -89,10 +89,10 @@ Settings:
 - The token is part of the printed URL and is redacted from the output channel.
 - The Simple Browser loads the local server. If your organization blocks local
   origins in webviews, set `keycode.openIn` to `external`.
-- If the panel asks to pair, paste the token from the keycode output channel or
-  switch to **keycode: Open in Browser**.
-- To use Chrome or another browser, run **keycode: Open in Browser** or
-  **keycode: Copy Pairing Token** and paste it into the pairing dialog.
+- If the panel asks to pair, paste the token from the KeyCode output channel or
+  switch to **KeyCode: Open in Browser**.
+- To use Chrome or another browser, run **KeyCode: Open in Browser** or
+  **KeyCode: Copy Pairing Token** and paste it into the pairing dialog.
 
 ## Package a VSIX
 

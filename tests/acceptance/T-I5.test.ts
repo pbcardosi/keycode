@@ -197,7 +197,7 @@ describe("T-I5: Remote Control", () => {
     const page = await fetch(`${server.url}/`);
     expect(page.status).toBe(200);
     expect(page.headers.get("content-security-policy")).toContain("default-src 'self'");
-    expect(await page.text()).toContain("keycode");
+    expect(await page.text()).toContain("KeyCode");
     const script = await fetch(`${server.url}/app.js`);
     expect(script.status).toBe(200);
     expect(await script.text()).toContain("WebSocket");

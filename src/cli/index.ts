@@ -168,7 +168,7 @@ function installSigint(controller: AbortController): void {
 
 const program = new Command();
 program
-  .name("keycode")
+  .name("KeyCode")
   .description("A free, local-first, bring-your-own-key coding agent.")
   .version(VERSION, "-v, --version")
   .argument("[prompt]", "prompt to run headlessly")

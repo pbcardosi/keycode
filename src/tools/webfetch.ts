@@ -180,7 +180,7 @@ export function createWebFetchTool(options: WebFetchOptions = {}): Tool<WebFetch
           response = await fetchImpl(url, {
             redirect: "manual",
             signal: ctx.signal,
-            headers: { "user-agent": "keycode/0.1" },
+            headers: { "user-agent": "KeyCode/0.1" },
           });
           const location = response.headers.get("location");
           if (

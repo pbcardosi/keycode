@@ -1,6 +1,6 @@
 # SPEC.md
 
-**Product:** keycode
+**Product:** KeyCode
 **Spec version:** 0.1.0
 **Parity target:** Claude Code v2.1.322 (observed behavior; clean-room)
 **Runtime:** Node.js >= 22, ESM, TypeScript strict
@@ -11,7 +11,7 @@
 
 ## 1. Purpose
 
-This document is the implementation contract for `keycode`. It defines:
+This document is the implementation contract for `KeyCode`. It defines:
 
 - the architecture and core contracts;
 - every feature we intend to build, grouped by domain;
@@ -852,7 +852,7 @@ M5, M6, O1, U1, U2, U5.
 
 **Deliverables:**
 
-- `keycode` installs and starts with Gemini free tier or Ollama.
+- `KeyCode` installs and starts with Gemini free tier or Ollama.
 - Reads, searches, edits, and runs tests in a repo.
 - Sessions persist, resume, fork, compact, and rewind.
 - Permission prompts work; deny rules are enforced.

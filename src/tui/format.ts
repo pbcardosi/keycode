@@ -64,7 +64,7 @@ export function renderTodos(todos: Array<{ id: string; content: string; status: 
 export function renderTranscript(messages: Message[]): string {
   return messages
     .map((message) => {
-      const label = message.role === "user" ? "You" : "keycode";
+      const label = message.role === "user" ? "You" : "KeyCode";
       const text = message.content
         .filter((block): block is Extract<ContentBlock, { type: "text" }> => block.type === "text")
         .map((block) => renderMarkdown(block.text))

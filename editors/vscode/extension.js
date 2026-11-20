@@ -15,14 +15,14 @@ let contextDisposable = null;
 function setStatus(state) {
   if (!status) return;
   if (state === "running") {
-    status.text = "$(comment-discussion) keycode";
-    status.tooltip = "keycode is running · click to open chat";
+    status.text = "$(comment-discussion) KeyCode";
+    status.tooltip = "KeyCode is running · click to open chat";
   } else if (state === "starting") {
-    status.text = "$(sync~spin) keycode";
-    status.tooltip = "Starting the keycode server";
+    status.text = "$(sync~spin) KeyCode";
+    status.tooltip = "Starting the KeyCode server";
   } else {
-    status.text = "$(circle-slash) keycode";
-    status.tooltip = "keycode is stopped · click to start";
+    status.text = "$(circle-slash) KeyCode";
+    status.tooltip = "KeyCode is stopped · click to start";
   }
 }
 
@@ -161,13 +161,13 @@ function startServer() {
     };
 
     const timer = setTimeout(() => {
-      fail("keycode did not print a Remote Control URL within 20 seconds.");
+      fail("KeyCode did not print a Remote Control URL within 20 seconds.");
     }, 20_000);
 
     child.on("error", (error) => {
       if (error.code === "ENOENT") {
         fail(
-          `Cannot find "${executable}". Install keycode with "npm install -g keycode-cli" or set keycode.executable.`,
+          `Cannot find "${executable}". Install KeyCode with "npm install -g keycode-cli" or set keycode.executable.`,
         );
         return;
       }
@@ -205,7 +205,7 @@ function startServer() {
         setStatus("stopped");
       }
       if (!settled) {
-        fail(`keycode exited with code ${code ?? "null"}. ${errors.trim()}`);
+        fail(`KeyCode exited with code ${code ?? "null"}. ${errors.trim()}`);
       }
     });
   }).finally(() => {
@@ -220,7 +220,7 @@ function stopServer() {
     setStatus("stopped");
     return;
   }
-  log("stopping keycode");
+  log("stopping KeyCode");
   void postContext(null);
   killTree(server.child);
   server = null;
@@ -246,7 +246,7 @@ async function openChat() {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     output?.show(true);
-    void vscode.window.showErrorMessage(`keycode: ${message}`);
+    void vscode.window.showErrorMessage(`KeyCode: ${message}`);
   }
 }
 
@@ -256,17 +256,17 @@ async function copyPairingToken() {
     const token = pairingToken(current.url);
     await vscode.env.clipboard.writeText(token);
     void vscode.window.showInformationMessage(
-      "keycode pairing token copied. Paste it into the browser prompt.",
+      "KeyCode pairing token copied. Paste it into the browser prompt.",
     );
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `keycode: ${error instanceof Error ? error.message : String(error)}`,
+      `KeyCode: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 }
 
 function activate(context) {
-  output = vscode.window.createOutputChannel("keycode");
+  output = vscode.window.createOutputChannel("KeyCode");
   status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   status.command = "keycode.openChat";
   setStatus("stopped");
@@ -295,7 +295,7 @@ function activate(context) {
     }),
     vscode.commands.registerCommand("keycode.stopServer", () => {
       stopServer();
-      void vscode.window.showInformationMessage("keycode server stopped.");
+      void vscode.window.showInformationMessage("KeyCode server stopped.");
     }),
     vscode.commands.registerCommand("keycode.openInBrowser", async () => {
       try {
@@ -303,7 +303,7 @@ function activate(context) {
         await vscode.env.openExternal(vscode.Uri.parse(current.url));
       } catch (error) {
         void vscode.window.showErrorMessage(
-          `keycode: ${error instanceof Error ? error.message : String(error)}`,
+          `KeyCode: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     }),
@@ -312,7 +312,7 @@ function activate(context) {
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("keycode") && server) {
         void vscode.window.showInformationMessage(
-          "keycode settings changed. Run “keycode: Restart Server” to apply them.",
+          "KeyCode settings changed. Run “KeyCode: Restart Server” to apply them.",
         );
       }
     }),

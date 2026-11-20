@@ -1,7 +1,7 @@
 {
   "name": "keycode-vscode",
-  "displayName": "keycode",
-  "description": "Local-first coding agent for VS Code, powered by the keycode CLI.",
+  "displayName": "KeyCode",
+  "description": "Local-first coding agent for VS Code, powered by the KeyCode CLI.",
   "version": "0.1.0",
   "publisher": "keycode",
   "license": "Apache-2.0",
@@ -25,41 +25,41 @@
     "commands": [
       {
         "command": "keycode.openChat",
-        "title": "keycode: Open Chat"
+        "title": "KeyCode: Open Chat"
       },
       {
         "command": "keycode.restartServer",
-        "title": "keycode: Restart Server"
+        "title": "KeyCode: Restart Server"
       },
       {
         "command": "keycode.stopServer",
-        "title": "keycode: Stop Server"
+        "title": "KeyCode: Stop Server"
       },
       {
         "command": "keycode.openInBrowser",
-        "title": "keycode: Open in Browser"
+        "title": "KeyCode: Open in Browser"
       },
       {
         "command": "keycode.copyToken",
-        "title": "keycode: Copy Pairing Token"
+        "title": "KeyCode: Copy Pairing Token"
       },
       {
         "command": "keycode.showLog",
-        "title": "keycode: Show Log"
+        "title": "KeyCode: Show Log"
       }
     ],
     "configuration": {
-      "title": "keycode",
+      "title": "KeyCode",
       "properties": {
         "keycode.executable": {
           "type": "string",
           "default": "keycode",
-          "description": "Path to the keycode executable. Use keycode.cmd on Windows if needed."
+          "description": "Path to the KeyCode executable (keycode or keycode.cmd)."
         },
         "keycode.provider": {
           "type": "string",
           "default": "",
-          "description": "Provider id, for example ollama, gemini, or groq. Empty lets keycode choose."
+          "description": "Provider id, for example ollama, gemini, or groq. Empty lets KeyCode choose."
         },
         "keycode.model": {
           "type": "string",
@@ -81,12 +81,12 @@
           "type": "string",
           "enum": ["editor", "external"],
           "default": "editor",
-          "description": "Open the keycode web UI in a VS Code editor tab or the default browser."
+          "description": "Open the KeyCode web UI in a VS Code editor tab or the default browser."
         },
         "keycode.forwardSelection": {
           "type": "boolean",
           "default": true,
-          "description": "Send the active file and selected text to keycode as editor context."
+          "description": "Send the active file and selected text to KeyCode as editor context."
         }
       }
     }

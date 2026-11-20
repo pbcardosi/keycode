@@ -265,7 +265,7 @@ export function TuiApp({ setup, permissions, onClear }: TuiAppProps): React.Reac
     <Box flexDirection="column">
       <Box marginBottom={1}>
         <Text color="cyan" bold>
-          keycode
+          KeyCode
         </Text>
         <Text dimColor>
           {" · "}
@@ -292,7 +292,7 @@ export function TuiApp({ setup, permissions, onClear }: TuiAppProps): React.Reac
               {text.length > 0 && (
                 <>
                   <Text color={message.role === "user" ? "cyan" : "green"}>
-                    {message.role === "user" ? "You" : "keycode"}:
+                    {message.role === "user" ? "You" : "KeyCode"}:
                   </Text>
                   <Text>{renderMarkdown(text)}</Text>
                 </>
@@ -318,7 +318,7 @@ export function TuiApp({ setup, permissions, onClear }: TuiAppProps): React.Reac
         })}
         {streamText.length > 0 && (
           <Box flexDirection="column" marginBottom={1}>
-            <Text color="green">keycode:</Text>
+            <Text color="green">KeyCode:</Text>
             <Text>{renderMarkdown(streamText)}</Text>
           </Box>
         )}

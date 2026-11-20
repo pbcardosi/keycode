@@ -39,7 +39,7 @@ describe("T-U6: onboarding and help", () => {
       out: (line) => notes.push(line),
       signal: new AbortController().signal,
     });
-    expect(notes.join("\n")).toContain("keycode 0.1.0");
+    expect(notes.join("\n")).toContain("KeyCode 0.1.0");
     expect(releaseNotes()).toContain("Part 1");
   });
 });

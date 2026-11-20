@@ -4,7 +4,7 @@ import type { SessionView } from "../contracts/session.js";
 
 export function exportMarkdown(view: SessionView): string {
   const lines: string[] = [
-    `# keycode session ${view.header.id}`,
+    `# KeyCode session ${view.header.id}`,
     "",
     `- name: ${view.name}`,
     `- cwd: ${view.header.cwd}`,

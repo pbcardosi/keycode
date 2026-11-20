@@ -37,7 +37,7 @@ describe("T-U1: TUI renderer", () => {
     ]);
     expect(transcript).toContain("You");
     expect(transcript).toContain("hello");
-    expect(transcript).toContain("keycode");
+    expect(transcript).toContain("KeyCode");
     expect(transcript).toContain("hi there");
   });
 

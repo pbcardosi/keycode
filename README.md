@@ -1,8 +1,8 @@
-# keycode
+# KeyCode
 
 A free, local-first, bring-your-own-key coding agent for the terminal.
 
-`keycode` is a clean-room reimplementation of the observable workflow of Claude
+`KeyCode` is a clean-room reimplementation of the observable workflow of Claude
 Code v2.1.322. It is not affiliated with Anthropic and does not require an
 Anthropic account.
 
@@ -13,7 +13,7 @@ from a local tarball or run from `dist/`; no registry package yet.
 
 ## Why
 
-Coding agents should not require a subscription to be useful. `keycode` is built
+Coding agents should not require a subscription to be useful. `KeyCode` is built
 around three rules:
 
 1. **Free by default.** Every feature works with a free-tier API key or a local
@@ -118,7 +118,7 @@ The agent protects against common small-model failures:
   `REPEATED_TOOL_CALL` so the model must verify or finish.
 - **Already-applied edits:** `Edit` returns a successful no-op instead of
   failing and provoking a retry loop.
-- **No native tools:** when a model declares `tools: false`, keycode appends a
+- **No native tools:** when a model declares `tools: false`, KeyCode appends a
   documented text protocol to the prompt and parses this fenced block:
 
   ````text
@@ -193,13 +193,13 @@ npx @vscode/vsce package
 code --install-extension keycode-vscode-0.1.0.vsix
 ```
 
-Then run **keycode: Open Chat** from the Command Palette. The extension has
+Then run **KeyCode: Open Chat** from the Command Palette. The extension has
 settings for executable, provider, model, permission mode, working directory,
 and whether to open in an editor tab or the external browser. The server is
 stopped when the extension deactivates.
 
 The extension is plain CommonJS, so there is no build step. It requires the
-`keycode` CLI on `PATH` or an absolute `keycode.executable`. `npm run
+KeyCode CLI on `PATH` or an absolute `keycode.executable`. `npm run
 extension:smoke` loads the extension with a mocked VS Code API and verifies the
 real server launch in a temp workspace.
 
@@ -225,7 +225,7 @@ Servers are started on first use and keyed by language id. The tool resolves
 and character inputs are 1-based. Requests time out; a failing server returns an
 error result instead of breaking the turn.
 
-keycode does not bundle language servers. Install them separately or point at
+KeyCode does not bundle language servers. Install them separately or point at
 an absolute path. For TypeScript projects without a local `typescript`
 installation, point the server at a `tsserver.js`:
 
@@ -292,7 +292,7 @@ in untrusted workspaces.
 ## Workspace trust
 
 Project settings can run hooks, MCP servers, language servers, browser drivers,
-and commands, and can add permission rules. Before any of that applies, keycode
+and commands, and can add permission rules. Before any of that applies, KeyCode
 shows a review:
 
 - TUI: a terminal prompt lists each item and asks for approval.
@@ -310,7 +310,7 @@ The review lists:
 - project commands, skills, agents, and output styles with content hashes.
 
 Approval is stored in `~/.keycode/trust.json` with a fingerprint. If any
-project-controlled item changes, keycode asks again instead of silently applying
+project-controlled item changes, KeyCode asks again instead of silently applying
 the new configuration.
 
 Headless runs cannot prompt, so they stay restricted unless you pass `--trust`.

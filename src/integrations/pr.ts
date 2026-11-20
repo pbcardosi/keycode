@@ -68,8 +68,8 @@ export function securityReview(diff: string): PrFinding[] {
 }
 
 export function buildPrComment(findings: PrFinding[]): string {
-  if (findings.length === 0) return "keycode review: no findings. ✅";
-  const lines = ["keycode review findings:", ""];
+  if (findings.length === 0) return "KeyCode review: no findings. ✅";
+  const lines = ["KeyCode review findings:", ""];
   for (const finding of findings) {
     const location = finding.file ? ` (${finding.file}${finding.line === undefined ? "" : `:${finding.line}`})` : "";
     lines.push(`- **${finding.severity}**${location}: ${finding.message}`);

@@ -22,7 +22,7 @@ export function completeOnboarding(home: string): void {
 
 export function onboardingText(): string {
   return [
-    "Welcome to keycode.",
+    "Welcome to KeyCode.",
     "1. Theme: pick a theme (default, dark, or light).",
     "2. Trust: choose whether to trust this workspace's project settings and hooks.",
     "3. Provider: choose a free provider (Gemini, Groq, OpenRouter) or a local model (Ollama, LM Studio, llama.cpp).",
@@ -32,7 +32,7 @@ export function onboardingText(): string {
 
 export function releaseNotes(): string {
   return [
-    "keycode 0.1.0",
+    "KeyCode 0.1.0",
     "- Part 1: interactive and headless sessions, free/local providers, core tools, permissions, memory, and TUI.",
     "- Part 2: hooks, commands, skills, subagents, web tools, notebooks, background tasks, sandbox, policy, privacy, and accessibility.",
     "See SPEC.md for the full feature catalog.",
