@@ -22,6 +22,7 @@ for (const id of [
   "keycode.restartServer",
   "keycode.stopServer",
   "keycode.openInBrowser",
+  "keycode.copyToken",
   "keycode.showLog",
 ]) {
   if (!commands.has(id)) failures.push(`missing command ${id}`);
@@ -64,6 +65,9 @@ if (!existsSync(libPath)) {
   const url = lib.parseRemoteUrl("Remote Control: http://127.0.0.1:1234/#token=abc");
   if (url !== "http://127.0.0.1:1234/#token=abc") {
     failures.push("parseRemoteUrl must extract the printed URL");
+  }
+  if (lib.pairingToken(url) !== "abc") {
+    failures.push("pairingToken must extract the token fragment");
   }
   const launched = lib.launch("C:\\Program Files\\keycode\\keycode.cmd", ["remote"], "win32", "cmd.exe");
   if (launched.command !== "cmd.exe" || !launched.args.at(-1).includes("keycode.cmd")) {

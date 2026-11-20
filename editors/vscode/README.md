@@ -33,6 +33,12 @@ You can also open the chat from a shell with the registered deep link:
 Start-Process "vscode://keycode.keycode-vscode/open"
 ```
 
+To copy the pairing token for Chrome or another browser:
+
+```powershell
+Start-Process "vscode://keycode.keycode-vscode/token"
+```
+
 ## Editor context
 
 With `keycode.forwardSelection` enabled (the default), the extension sends:
@@ -62,6 +68,7 @@ Commands:
 - **keycode: Restart Server**
 - **keycode: Stop Server**
 - **keycode: Open in Browser**
+- **keycode: Copy Pairing Token**
 - **keycode: Show Log**
 
 Settings:
@@ -84,6 +91,8 @@ Settings:
   origins in webviews, set `keycode.openIn` to `external`.
 - If the panel asks to pair, paste the token from the keycode output channel or
   switch to **keycode: Open in Browser**.
+- To use Chrome or another browser, run **keycode: Open in Browser** or
+  **keycode: Copy Pairing Token** and paste it into the pairing dialog.
 
 ## Package a VSIX
 

@@ -13,6 +13,7 @@ const home = join(workspace, "home");
 const logs = [];
 const opened = [];
 const commands = new Map();
+let copied = "";
 const editorText = "const answer = 42;\n";
 const editorPath = join(workspace, "sample.ts");
 let selectionHandler = null;
@@ -78,7 +79,14 @@ const mockVscode = {
       opened.push([id, value]);
     },
   },
-  env: { openExternal: async (value) => opened.push(["external", value]) },
+  env: {
+    openExternal: async (value) => opened.push(["external", value]),
+    clipboard: {
+      writeText: async (value) => {
+        copied = value;
+      },
+    },
+  },
 };
 
 Module._load = function load(request, parent, isMain) {
@@ -114,6 +122,11 @@ try {
   if (!logs.every((line) => !line.includes(token))) {
     throw new Error("the token leaked into the output channel");
   }
+
+  const copyToken = commands.get("keycode.copyToken");
+  if (typeof copyToken !== "function") throw new Error("copy-token command is missing");
+  await copyToken();
+  if (copied !== token) throw new Error("copy-token command did not copy the pairing token");
 
   const contextResponse = await fetch(`${new URL(url).origin}/context?token=${token}`);
   if (!contextResponse.ok) throw new Error(`context request failed: ${contextResponse.status}`);

@@ -10,3 +10,5 @@
 - Active file and selection forwarding to the keycode server, with
   `keycode.forwardSelection` to disable it.
 - `vscode://keycode.keycode-vscode/open` deep link to open the chat directly.
+- **keycode: Copy Pairing Token** for pairing a normal browser with the running
+  server, also available as `vscode://keycode.keycode-vscode/token`.

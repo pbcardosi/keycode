@@ -21,4 +21,12 @@ function parseRemoteUrl(line) {
   return match ? match[1] : null;
 }
 
-module.exports = { sanitize, launch, parseRemoteUrl };
+function pairingToken(url) {
+  try {
+    return new URL(url).hash.replace(/^#token=/, "");
+  } catch {
+    return "";
+  }
+}
+
+module.exports = { sanitize, launch, parseRemoteUrl, pairingToken };

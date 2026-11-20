@@ -51,6 +51,8 @@ First alpha.
 - VS Code editor context forwarding: active file and selection reach the web UI
   over the authenticated loopback endpoint and are prepended to prompts.
 - `vscode://keycode.keycode-vscode/open` deep link for the VS Code extension.
+- VS Code command to copy the pairing token for Chrome or another browser, with
+  a `vscode://keycode.keycode-vscode/token` deep link.
 - `LSP` agent tool for diagnostics, hover, definition, and references, configured
   under `lsp` in settings and started on demand.
 - UTF-8 BOM handling for settings files, and Windows `.cmd` language-server

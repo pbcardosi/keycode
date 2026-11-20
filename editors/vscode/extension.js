@@ -2,7 +2,7 @@ const vscode = require("vscode");
 const { spawn, spawnSync } = require("node:child_process");
 const { homedir } = require("node:os");
 const http = require("node:http");
-const { launch, parseRemoteUrl, sanitize } = require("./lib.js");
+const { launch, pairingToken, parseRemoteUrl, sanitize } = require("./lib.js");
 
 let output = null;
 let status = null;
@@ -250,6 +250,21 @@ async function openChat() {
   }
 }
 
+async function copyPairingToken() {
+  try {
+    const current = await startServer();
+    const token = pairingToken(current.url);
+    await vscode.env.clipboard.writeText(token);
+    void vscode.window.showInformationMessage(
+      "keycode pairing token copied. Paste it into the browser prompt.",
+    );
+  } catch (error) {
+    void vscode.window.showErrorMessage(
+      `keycode: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 function activate(context) {
   output = vscode.window.createOutputChannel("keycode");
   status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
@@ -270,6 +285,7 @@ function activate(context) {
     vscode.window.registerUriHandler({
       handleUri(uri) {
         if (uri.path === "/open" || uri.path === "") void openChat();
+        else if (uri.path === "/token") void copyPairingToken();
       },
     }),
     vscode.commands.registerCommand("keycode.openChat", openChat),
@@ -291,6 +307,7 @@ function activate(context) {
         );
       }
     }),
+    vscode.commands.registerCommand("keycode.copyToken", copyPairingToken),
     vscode.commands.registerCommand("keycode.showLog", () => output.show(true)),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("keycode") && server) {

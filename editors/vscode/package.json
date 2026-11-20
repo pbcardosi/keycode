@@ -18,6 +18,7 @@
     "onCommand:keycode.restartServer",
     "onCommand:keycode.stopServer",
     "onCommand:keycode.openInBrowser",
+    "onCommand:keycode.copyToken",
     "onCommand:keycode.showLog"
   ],
   "contributes": {
@@ -37,6 +38,10 @@
       {
         "command": "keycode.openInBrowser",
         "title": "keycode: Open in Browser"
+      },
+      {
+        "command": "keycode.copyToken",
+        "title": "keycode: Copy Pairing Token"
       },
       {
         "command": "keycode.showLog",
