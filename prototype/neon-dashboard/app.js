@@ -1,6 +1,6 @@
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const forceMotion = new URLSearchParams(window.location.search).get("motion") === "on";
-const WINDOW_MS = 60_000;
+const DEFAULT_WINDOW_MS = 60_000;
 const MAX_EVENTS = 80;
 
 const lanes = [
@@ -52,6 +52,19 @@ const demo = [
   { kind: "Context", title: "Compacted 2 turns", meta: "saved 3.1k" },
 ];
 
+const sampleChat = [
+  {
+    role: "user",
+    text: "Put the execution field and event stream side by side at half width. Make them taller and give the chat the rest.",
+    at: "14:59",
+  },
+  {
+    role: "assistant",
+    text: "The field is on the left and the stream on the right. Both are taller, and the transcript now fills the remaining column.",
+    at: "15:00",
+  },
+];
+
 const state = {
   events: [],
   filter: "all",
@@ -59,12 +72,17 @@ const state = {
   preview: "full",
   order: "latest",
   paused: false,
+  real: false,
   freezeAt: null,
   raf: 0,
   timer: 0,
   demoIndex: 0,
   sequence: 0,
+  windowMs: DEFAULT_WINDOW_MS,
+  durationMs: null,
   sessionStart: Date.now() - 18 * 60_000,
+  chat: sampleChat,
+  chatStart: "14:02",
 };
 
 const dom = {
@@ -82,7 +100,24 @@ const dom = {
   sessionState: document.getElementById("session-state"),
   title: document.getElementById("session-title"),
   sub: document.getElementById("session-sub"),
+  fieldSubtitle: document.getElementById("field-subtitle"),
   duration: document.getElementById("duration"),
+  source: document.getElementById("source-chip"),
+  axisStart: document.getElementById("axis-start"),
+  axisMid: document.getElementById("axis-mid"),
+  axisEnd: document.getElementById("axis-end"),
+  providerName: document.getElementById("provider-name"),
+  providerModel: document.getElementById("provider-model"),
+  providerEndpoint: document.getElementById("provider-endpoint"),
+  startedAt: document.getElementById("started-at"),
+  contextPercent: document.getElementById("context-percent"),
+  contextMeter: document.getElementById("context-meter"),
+  contextFill: document.getElementById("context-fill"),
+  contextUsed: document.getElementById("context-used"),
+  contextWindow: document.getElementById("context-window"),
+  contextBreakdown: document.getElementById("context-breakdown"),
+  chatStart: document.getElementById("chat-start"),
+  chatMessages: document.getElementById("chat-messages"),
   tools: document.getElementById("stat-tools"),
   files: document.getElementById("stat-files"),
   tests: document.getElementById("stat-tests"),
@@ -143,6 +178,159 @@ function formatClock(date) {
     minute: "2-digit",
     hour12: false,
   });
+}
+
+const numberFormat = new Intl.NumberFormat("en-US");
+
+function formatNumber(value) {
+  return numberFormat.format(Math.max(0, Math.round(value)));
+}
+
+function formatDuration(ms) {
+  const value = Math.max(0, Math.round(ms));
+  if (value < 1_000) return `${value} ms`;
+  if (value < 10_000) return `${(value / 1_000).toFixed(1)} s`;
+  if (value < 60_000) return `${Math.round(value / 1_000)} s`;
+  const minutes = Math.floor(value / 60_000);
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+}
+
+function formatSpan(ms, part) {
+  const seconds = Math.round(ms / 1_000);
+  if (seconds < 120) return part === "start" ? `${seconds}s ago` : `${Math.round(seconds / 2)}s`;
+  const minutes = Math.round(ms / 60_000);
+  return part === "start" ? `${minutes}m ago` : `${Math.round(minutes / 2)}m`;
+}
+
+function setAxisLabels() {
+  dom.axisStart.textContent = formatSpan(state.windowMs, "start");
+  dom.axisMid.textContent = formatSpan(state.windowMs, "mid");
+  dom.axisEnd.textContent = "now";
+}
+
+function messageTime(message) {
+  return message.at.includes("T") ? formatClock(new Date(message.at)) : message.at;
+}
+
+function chatMessage(message) {
+  const article = document.createElement("article");
+  article.className = `message message-${message.role}`;
+  const meta = document.createElement("p");
+  meta.className = "message-meta";
+  const author = document.createElement("span");
+  author.className = "message-author";
+  author.textContent = message.role === "user" ? "You" : "KeyCode";
+  const time = document.createElement("time");
+  time.textContent = messageTime(message);
+  if (message.at.includes("T")) time.dateTime = message.at;
+  meta.append(author, time);
+  const text = document.createElement("p");
+  text.className = "message-text";
+  text.textContent = message.text;
+  article.append(meta, text);
+  return article;
+}
+
+function renderChat() {
+  dom.chatMessages.replaceChildren(...state.chat.map(chatMessage));
+  dom.chatStart.textContent = `Session started ${state.chatStart}`;
+}
+
+function breakdownRow(label, value) {
+  const row = document.createElement("div");
+  const term = document.createElement("dt");
+  term.textContent = label;
+  const detail = document.createElement("dd");
+  detail.className = "mono";
+  detail.textContent = formatNumber(value);
+  row.append(term, detail);
+  return row;
+}
+
+function setUsage(usage, contextWindow) {
+  const input = Math.max(0, usage?.inputTokens ?? 0);
+  const windowSize = Math.max(1, contextWindow ?? 128_000);
+  const ratio = Math.min(1, input / windowSize);
+  dom.contextPercent.textContent = `${Math.round(ratio * 100)}%`;
+  dom.contextMeter.setAttribute("aria-valuenow", String(input));
+  dom.contextMeter.setAttribute("aria-valuemax", String(windowSize));
+  dom.contextFill.style.width = `${(ratio * 100).toFixed(2)}%`;
+  dom.contextUsed.textContent = formatNumber(input);
+  dom.contextWindow.textContent = formatNumber(windowSize);
+  dom.contextBreakdown.replaceChildren(
+    breakdownRow("Input", input),
+    breakdownRow("Output", usage?.outputTokens ?? 0),
+    breakdownRow("Cached", usage?.cachedTokens ?? 0),
+  );
+}
+
+function setProvider(trace) {
+  const provider = trace.session.provider ?? "ollama";
+  dom.providerName.textContent =
+    provider === "ollama" ? "Ollama" : provider.charAt(0).toUpperCase() + provider.slice(1);
+  dom.providerModel.textContent = trace.session.model ?? "unknown model";
+  dom.providerEndpoint.textContent =
+    provider === "ollama" ? "127.0.0.1:11434" : "Configured provider";
+  dom.startedAt.textContent = formatClock(new Date(trace.session.createdAt));
+}
+
+function applyTrace(trace) {
+  state.real = true;
+  state.durationMs = Math.max(0, trace.session.durationMs ?? 0);
+  state.windowMs = Math.max(DEFAULT_WINDOW_MS, state.durationMs + 15_000);
+  state.sessionStart = Date.now() - state.durationMs;
+  state.chat =
+    Array.isArray(trace.chat) && trace.chat.length > 0
+      ? trace.chat.map((message) => ({
+          role: message.role === "user" ? "user" : "assistant",
+          text: String(message.text ?? ""),
+          at: String(message.at ?? ""),
+        }))
+      : sampleChat;
+  state.chatStart = formatClock(new Date(trace.session.createdAt));
+
+  const end = Math.max(
+    Date.parse(trace.session.createdAt),
+    ...trace.events.map((event) => Date.parse(event.endedAt ?? event.startedAt)),
+  );
+  const now = performance.now();
+  state.events = trace.events.map((event, index) => {
+    const started = Date.parse(event.startedAt);
+    const fallback = kindMeta[event.kind] ?? kindMeta.Shell;
+    return {
+      id: event.id ?? `evt_${index + 1}`,
+      perf: now - (end - started),
+      wall: new Date(started),
+      kind: event.kind,
+      lane: event.lane ?? fallback.lane,
+      laneKey: event.laneKey ?? fallback.key,
+      icon: event.icon ?? fallback.icon,
+      category: event.category ?? fallback.category,
+      file: event.file === true,
+      title: String(event.title ?? event.kind),
+      meta: String(event.meta ?? ""),
+      status: event.status === "error" ? "error" : "ok",
+      isNew: false,
+    };
+  });
+
+  const title = trace.session.title ?? trace.chat?.[0]?.text ?? "Recorded session";
+  dom.title.textContent = title.length > 64 ? `${title.slice(0, 63)}…` : title;
+  const current = dom.recent.querySelector(".recent-item.is-current");
+  if (current) {
+    const recentTitle = current.querySelector(".recent-title");
+    const recentMeta = current.querySelector(".recent-meta");
+    if (recentTitle) recentTitle.textContent = title;
+    if (recentMeta) recentMeta.textContent = formatClock(new Date(trace.session.createdAt));
+  }
+  dom.source.textContent = "Real trace";
+  dom.sessionState.textContent = "Recorded trace";
+  dom.fieldSubtitle.textContent = "Tool calls across this session.";
+  setProvider(trace);
+  setUsage(trace.usage, trace.session.contextWindow);
+  setAxisLabels();
+  renderChat();
 }
 
 function icon(id, className = "icon") {
@@ -270,13 +458,24 @@ function updateStats() {
 
   dom.tools.textContent = String(tools.length);
   dom.files.textContent = String(files.size);
-  dom.tests.textContent = failed > 0 ? `${passed} passed, ${failed} failed` : `${passed} passed`;
+  if (tests.length === 0) {
+    dom.tests.textContent = "None";
+  } else {
+    dom.tests.textContent =
+      failed > 0 ? `${passed} passed, ${failed} failed` : `${passed} passed`;
+  }
   dom.tests.classList.toggle("danger", failed > 0);
   dom.approvals.textContent = String(approvals.length);
-  dom.sub.textContent = `${tools.length} tool calls, ${files.size} files changed`;
+  const callLabel = tools.length === 1 ? "tool call" : "tool calls";
+  const fileLabel = files.size === 1 ? "file changed" : "files changed";
+  dom.sub.textContent = `${tools.length} ${callLabel}, ${files.size} ${fileLabel}`;
 }
 
 function updateClock() {
+  if (state.real) {
+    dom.duration.textContent = formatDuration(state.durationMs ?? 0);
+    return;
+  }
   const minutes = Math.max(0, Math.floor((Date.now() - state.sessionStart) / 60_000));
   dom.duration.textContent =
     minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
@@ -293,7 +492,7 @@ function eventColor(event) {
 }
 
 function eventX(event, now) {
-  return canvasSize.width - ((now - event.perf) / WINDOW_MS) * canvasSize.width;
+  return canvasSize.width - ((now - event.perf) / state.windowMs) * canvasSize.width;
 }
 
 function draw(now) {
@@ -363,7 +562,7 @@ function draw(now) {
   ctx.restore();
 
   const visible = state.events.filter(
-    (event) => now - event.perf <= WINDOW_MS && event.perf <= now,
+    (event) => now - event.perf <= state.windowMs && event.perf <= now,
   );
 
   // Links between consecutive events make the causal shape visible.
@@ -372,7 +571,8 @@ function draw(now) {
     const previous = visible[index - 1];
     const current = visible[index];
     if (previous === undefined || current === undefined) continue;
-    if (current.perf - previous.perf > 12_000) continue;
+    const linkWindow = state.real ? Number.POSITIVE_INFINITY : 12_000;
+    if (current.perf - previous.perf > linkWindow) continue;
     const x1 = eventX(previous, now);
     const x2 = eventX(current, now);
     const y1 = laneY(previous.lane);
@@ -455,7 +655,7 @@ function frame(now) {
 }
 
 function appendDemoEvent() {
-  if (state.paused) return;
+  if (state.paused || state.real) return;
   const template = demo[state.demoIndex % demo.length];
   state.demoIndex += 1;
   if (!template) return;
@@ -474,11 +674,11 @@ function startMotion() {
   state.paused = false;
   state.freezeAt = null;
   state.raf = window.requestAnimationFrame(frame);
-  state.timer = window.setInterval(appendDemoEvent, 2_600);
+  if (!state.real) state.timer = window.setInterval(appendDemoEvent, 2_600);
   dom.pause.setAttribute("aria-pressed", "false");
-  dom.pause.setAttribute("aria-label", "Pause sample activity");
+  dom.pause.setAttribute("aria-label", "Pause activity");
   dom.fieldState.hidden = true;
-  dom.sessionState.textContent = "Running sample";
+  dom.sessionState.textContent = state.real ? "Recorded trace" : "Running sample";
 }
 
 function stopMotion() {
@@ -495,9 +695,9 @@ function setPaused(paused) {
     stopMotion();
     draw(state.freezeAt);
     dom.pause.setAttribute("aria-pressed", "true");
-    dom.pause.setAttribute("aria-label", "Resume sample activity");
+    dom.pause.setAttribute("aria-label", "Resume activity");
     dom.fieldState.hidden = false;
-    dom.sessionState.textContent = "Paused sample";
+    dom.sessionState.textContent = state.real ? "Paused trace" : "Paused sample";
   } else {
     startMotion();
   }
@@ -530,13 +730,18 @@ function showFull() {
 }
 
 function resetSession() {
+  state.real = false;
   state.events = [];
   state.sessionStart = Date.now();
+  state.durationMs = null;
+  state.windowMs = DEFAULT_WINDOW_MS;
   state.demoIndex = 0;
   state.sequence = 0;
   state.filter = "all";
   state.query = "";
   state.preview = "full";
+  state.chat = sampleChat;
+  state.chatStart = formatClock(new Date());
   dom.filter.value = "";
   dom.state.value = "full";
   for (const button of document.querySelectorAll("[data-filter]")) {
@@ -544,6 +749,11 @@ function resetSession() {
   }
   dom.title.textContent = "New session";
   dom.sub.textContent = "0 tool calls, 0 files changed";
+  dom.fieldSubtitle.textContent = "Tool calls across the last minute.";
+  dom.source.textContent = "Sample data";
+  dom.sessionState.textContent = state.paused ? "Paused sample" : "Running sample";
+  setAxisLabels();
+  renderChat();
 
   for (const item of dom.recent.querySelectorAll(".recent-item")) {
     item.classList.remove("is-current");
@@ -604,7 +814,13 @@ dom.order.addEventListener("click", () => {
 
 document.getElementById("show-full")?.addEventListener("click", showFull);
 document.getElementById("error-full")?.addEventListener("click", showFull);
-dom.newSession.addEventListener("click", resetSession);
+dom.newSession.addEventListener("click", () => {
+  if (state.real) {
+    window.location.href = window.location.pathname;
+    return;
+  }
+  resetSession();
+});
 dom.composer.addEventListener("submit", (event) => event.preventDefault());
 
 window.addEventListener("keydown", (event) => {
@@ -650,16 +866,37 @@ if (typeof ResizeObserver === "function") {
   }).observe(dom.stream);
 }
 
-seedEvents();
-renderEvents();
-updateStats();
-updateClock();
-resizeCanvas();
+async function init() {
+  const useReal = new URLSearchParams(window.location.search).get("trace") === "real";
+  if (useReal) {
+    try {
+      const response = await fetch("./trace.json", { cache: "no-store" });
+      if (!response.ok) throw new Error(`trace.json returned ${response.status}`);
+      applyTrace(await response.json());
+    } catch (error) {
+      console.warn("Real trace unavailable; using the seeded sample.", error);
+      seedEvents();
+      setAxisLabels();
+      renderChat();
+    }
+  } else {
+    seedEvents();
+    setAxisLabels();
+    renderChat();
+  }
 
-if (reduceMotion && !forceMotion) {
-  setPaused(true);
-} else {
-  startMotion();
+  renderEvents();
+  updateStats();
+  updateClock();
+  resizeCanvas();
+
+  if (reduceMotion && !forceMotion) {
+    setPaused(true);
+  } else {
+    startMotion();
+  }
+
+  window.setInterval(updateClock, 1_000);
 }
 
-window.setInterval(updateClock, 1_000);
+void init();

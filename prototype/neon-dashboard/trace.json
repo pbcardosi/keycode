@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "source": "session-jsonl",
+  "session": {
+    "id": "dba29dbc-f689-4c1c-b8b0-ab35134cc66a",
+    "provider": "ollama",
+    "model": "gemma4:e2b",
+    "title": "Read scratch.md and change hello to goodbye.",
+    "createdAt": "2026-11-20T11:12:44.718Z",
+    "endedAt": "2026-11-20T11:18:28.679Z",
+    "durationMs": 343961,
+    "contextWindow": 128000
+  },
+  "usage": {
+    "inputTokens": 2731,
+    "outputTokens": 2307,
+    "cachedTokens": 2657
+  },
+  "stats": {
+    "toolCalls": 6,
+    "files": 1,
+    "tests": 0,
+    "testsPassed": 0,
+    "testsFailed": 0,
+    "approvals": 0
+  },
+  "events": [
+    {
+      "id": "evt_context",
+      "kind": "Context",
+      "lane": 0,
+      "laneKey": "context",
+      "icon": "i-memory",
+      "category": "context",
+      "file": false,
+      "title": "Session context",
+      "meta": "system prompt",
+      "status": "ok",
+      "startedAt": "2026-11-20T11:12:44.731Z",
+      "endedAt": "2026-11-20T11:12:44.731Z",
+      "durationMs": 0
+    },
+    {
+      "id": "call_1vnmyg4e",
+      "kind": "Read",
+      "lane": 1,
+      "laneKey": "read",
+      "icon": "i-read",
+      "category": "tool",
+      "file": true,
+      "title": "scratch.md",
+      "meta": "985 ms",
+      "status": "ok",
+      "startedAt": "2026-11-20T11:14:13.869Z",
+      "endedAt": "2026-11-20T11:14:14.854Z",
+      "durationMs": 985,
+      "tokens": {
+        "inputTokens": 2336,
+        "outputTokens": 148,
+        "cachedTokens": 0
+      }
+    },
+    {
+      "id": "call_a8t52sh5",
+      "kind": "Edit",
+      "lane": 3,
+      "laneKey": "edit",
+      "icon": "i-edit",
+      "category": "tool",
+      "file": true,
+      "title": "scratch.md",
+      "meta": "+1 −1",
+      "status": "ok",
+      "startedAt": "2026-11-20T11:14:24.462Z",
+      "endedAt": "2026-11-20T11:14:44.218Z",
+      "durationMs": 19756,
+      "tokens": {
+        "inputTokens": 2373,
+        "outputTokens": 103,
+        "cachedTokens": 2336
+      }
+    },
+    {
+      "id": "call_0me3vjv0",
+      "kind": "Read",
+      "lane": 1,
+      "laneKey": "read",
+      "icon": "i-read",
+      "category": "tool",
+      "file": true,
+      "title": "scratch.md",
+      "meta": "20 ms",
+      "status": "ok",
+      "startedAt": "2026-11-20T11:15:53.811Z",
+      "endedAt": "2026-11-20T11:15:53.831Z",
+      "durationMs": 20,
+      "tokens": {
+        "inputTokens": 2454,
+        "outputTokens": 671,
+        "cachedTokens": 2370
+      }
+    },
+    {
+      "id": "call_ktuz0432",
+      "kind": "Edit",
+      "lane": 3,
+      "laneKey": "edit",
+      "icon": "i-edit",
+      "category": "tool",
+      "file": true,
+      "title": "scratch.md",
+      "meta": "failed",
+      "status": "error",
+      "startedAt": "2026-11-20T11:16:55.705Z",
+      "endedAt": "2026-11-20T11:17:04.108Z",
+      "durationMs": 8403,
+      "tokens": {
+        "inputTokens": 2592,
+        "outputTokens": 615,
+        "cachedTokens": 2451
+      }
+    },
+    {
+      "id": "call_erozhiox",
+      "kind": "Edit",
+      "lane": 3,
+      "laneKey": "edit",
+      "icon": "i-edit",
+      "category": "tool",
+      "file": true,
+      "title": "scratch.md",
+      "meta": "failed",
+      "status": "error",
+      "startedAt": "2026-11-20T11:17:42.799Z",
+      "endedAt": "2026-11-20T11:17:50.109Z",
+      "durationMs": 7310,
+      "tokens": {
+        "inputTokens": 2660,
+        "outputTokens": 404,
+        "cachedTokens": 2587
+      }
+    },
+    {
+      "id": "call_ixkhacdk",
+      "kind": "Read",
+      "lane": 1,
+      "laneKey": "read",
+      "icon": "i-read",
+      "category": "tool",
+      "file": true,
+      "title": "scratch.md",
+      "meta": "12 ms",
+      "status": "ok",
+      "startedAt": "2026-11-20T11:18:28.667Z",
+      "endedAt": "2026-11-20T11:18:28.679Z",
+      "durationMs": 12,
+      "tokens": {
+        "inputTokens": 2731,
+        "outputTokens": 366,
+        "cachedTokens": 2657
+      }
+    }
+  ],
+  "chat": [
+    {
+      "role": "user",
+      "text": "Read scratch.md and change hello to goodbye.",
+      "at": "2026-11-20T11:13:13.612Z"
+    },
+    {
+      "role": "assistant",
+      "text": "I have read scratch.md and made the requested change. Here is a summary of the actions taken: 1. Read scratch.md : The content was read. 1 hello world 2 2. Edit scratch.md : I attempted to replace \"hello\" with \"goodbye\"…",
+      "at": "2026-11-20T11:15:53.811Z"
+    }
+  ]
+}

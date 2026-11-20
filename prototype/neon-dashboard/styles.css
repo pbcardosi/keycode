@@ -467,7 +467,7 @@ body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-md);
-  height: clamp(220px, 31vh, 300px);
+  height: clamp(250px, 31vh, 300px);
   flex: 0 0 auto;
 }
 
@@ -504,11 +504,8 @@ body {
 }
 
 .top-row .event {
-  grid-template-columns: 64px 84px minmax(0, 1fr);
-}
-
-.top-row .event-meta {
-  display: none;
+  grid-template-columns: 52px 76px minmax(0, 1fr) 60px;
+  gap: var(--space-xs);
 }
 
 .top-row .skeleton-row {
@@ -1409,7 +1406,7 @@ body {
   }
 
   .chat-body {
-    min-height: 220px;
+    min-height: 300px;
     padding: var(--space-sm) var(--space-md);
   }
 

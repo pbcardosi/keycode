@@ -187,7 +187,7 @@
         </div>
 
         <div class="top-actions">
-          <span class="chip">Sample data</span>
+          <span class="chip" id="source-chip">Sample data</span>
         </div>
       </header>
 
@@ -207,7 +207,7 @@
           <header class="panel-head">
             <div class="panel-heading">
               <h2 id="field-title">Execution field</h2>
-              <p>Tool calls across the last minute.</p>
+              <p id="field-subtitle">Tool calls across the last minute.</p>
             </div>
             <div class="panel-tools">
               <ul class="legend" aria-label="Lane legend">
@@ -251,9 +251,9 @@
           </div>
 
           <div class="field-axis" aria-hidden="true">
-            <span>60s ago</span>
-            <span>30s</span>
-            <span>now</span>
+            <span id="axis-start">60s ago</span>
+            <span id="axis-mid">30s</span>
+            <span id="axis-end">now</span>
           </div>
         </section>
 
@@ -329,25 +329,27 @@
           </header>
 
           <div class="chat-body" id="chat-body">
-            <p class="chat-start">Session started 14:02</p>
-            <article class="message message-user">
-              <p class="message-meta">
-                <span class="message-author">You</span>
-                <time datetime="2026-11-20T14:59">14:59</time>
-              </p>
-              <p class="message-text">
-                Put the execution field and event stream side by side at half width. Make them taller and give the chat the rest.
-              </p>
-            </article>
-            <article class="message message-assistant">
-              <p class="message-meta">
-                <span class="message-author">KeyCode</span>
-                <time datetime="2026-11-20T15:00">15:00</time>
-              </p>
-              <p class="message-text">
-                The field is on the left and the stream on the right. Both are taller, and the transcript now fills the remaining column.
-              </p>
-            </article>
+            <p class="chat-start" id="chat-start">Session started 14:02</p>
+            <div id="chat-messages">
+              <article class="message message-user">
+                <p class="message-meta">
+                  <span class="message-author">You</span>
+                  <time datetime="2026-11-20T14:59">14:59</time>
+                </p>
+                <p class="message-text">
+                  Put the execution field and event stream side by side at half width. Make them taller and give the chat the rest.
+                </p>
+              </article>
+              <article class="message message-assistant">
+                <p class="message-meta">
+                  <span class="message-author">KeyCode</span>
+                  <time datetime="2026-11-20T15:00">15:00</time>
+                </p>
+                <p class="message-text">
+                  The field is on the left and the stream on the right. Both are taller, and the transcript now fills the remaining column.
+                </p>
+              </article>
+            </div>
           </div>
 
           <footer class="composer">
@@ -380,10 +382,10 @@
             <h2>Provider</h2>
             <span class="badge">Local</span>
           </div>
-          <p class="side-title">Ollama</p>
-          <p class="side-mono">gemma4:e2b</p>
+          <p class="side-title" id="provider-name">Ollama</p>
+          <p class="side-mono" id="provider-model">gemma4:e2b</p>
           <dl class="kv">
-            <div><dt>Endpoint</dt><dd class="mono">127.0.0.1:11434</dd></div>
+            <div><dt>Endpoint</dt><dd class="mono" id="provider-endpoint">127.0.0.1:11434</dd></div>
             <div><dt>Streaming</dt><dd>On</dd></div>
           </dl>
         </section>
@@ -391,20 +393,24 @@
         <section class="side-section">
           <div class="side-head">
             <h2>Context</h2>
-            <span class="mono">33%</span>
+            <span class="mono" id="context-percent">33%</span>
           </div>
           <div
             class="meter"
+            id="context-meter"
             role="meter"
             aria-label="Context used"
             aria-valuemin="0"
             aria-valuemax="128000"
             aria-valuenow="42180"
           >
-            <span class="meter-fill"></span>
+            <span class="meter-fill" id="context-fill"></span>
           </div>
-          <p class="meter-caption"><span class="mono">42,180</span> of 128,000 tokens</p>
-          <dl class="kv kv-tight">
+          <p class="meter-caption">
+            <span class="mono" id="context-used">42,180</span> of
+            <span class="mono" id="context-window">128,000</span> tokens
+          </p>
+          <dl class="kv kv-tight" id="context-breakdown">
             <div><dt>System</dt><dd class="mono">8,200</dd></div>
             <div><dt>Messages</dt><dd class="mono">24,600</dd></div>
             <div><dt>Tool output</dt><dd class="mono">9,380</dd></div>
@@ -417,7 +423,7 @@
             <span class="mono" id="duration">18m</span>
           </div>
           <dl class="kv">
-            <div><dt>Started</dt><dd class="mono">14:02</dd></div>
+            <div><dt>Started</dt><dd class="mono" id="started-at">14:02</dd></div>
             <div><dt>Tool calls</dt><dd class="mono" id="stat-tools">12</dd></div>
             <div><dt>Files changed</dt><dd class="mono" id="stat-files">5</dd></div>
             <div><dt>Tests</dt><dd class="mono" id="stat-tests">2 passed</dd></div>
