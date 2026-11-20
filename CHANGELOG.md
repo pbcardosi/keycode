@@ -53,6 +53,8 @@ First alpha.
 - First-class `Artifact`, `Browser`, and opt-in `Code Mode` agent tools:
   versioned HTML previews, a trusted allowlisted browser driver, and a
   persistent JavaScript tool bridge configured from settings.
+- Built-in Playwright browser driver using installed Chrome, with lazy launch,
+  screenshots, and session cleanup; custom driver modules still supported.
 - LSP, browser, and Code Mode configuration is ignored in untrusted workspaces.
 - Workspace trust review in the TUI and web UI: project permissions, hooks, MCP,
   LSP, browser drivers, env keys, and customization files are listed before

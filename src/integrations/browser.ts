@@ -8,6 +8,7 @@ export interface BrowserDriver {
   type(selector: string, text: string): Promise<void>;
   readDom(): Promise<string>;
   screenshot(): Promise<{ mime: string; data: string }>;
+  close?(): Promise<void>;
 }
 
 export interface BrowserToolOptions {
@@ -36,7 +37,9 @@ function originAllowed(url: string, allowedDomains: string[]): boolean {
   }
 }
 
-export function createBrowserTool(options: BrowserToolOptions): Tool<BrowserInputType> {
+export function createBrowserTool(
+  options: BrowserToolOptions,
+): Tool<BrowserInputType> & { stop(): Promise<void> } {
   return {
     name: "Browser",
     description:
@@ -44,6 +47,9 @@ export function createBrowserTool(options: BrowserToolOptions): Tool<BrowserInpu
     input: BrowserInput,
     readOnly: false,
     concurrency: "exclusive",
+    async stop(): Promise<void> {
+      await options.driver.close?.();
+    },
     async execute(input: BrowserInputType, ctx: ToolContext): Promise<ToolResult> {
       if (ctx.signal.aborted) return toolError("Browser action aborted.", { code: "ABORTED" });
       try {

@@ -46,6 +46,7 @@ import { createLspTool } from "../tools/lsp.js";
 import { createArtifactTool } from "../tools/artifact.js";
 import { ArtifactStore } from "../artifacts/store.js";
 import { createBrowserTool, type BrowserDriver } from "../integrations/browser.js";
+import { createPlaywrightDriver } from "../integrations/playwrightDriver.js";
 import { pathToFileURL } from "node:url";
 import { BudgetGuard, type Pricing } from "../providers/budget.js";
 import { trustStatus, trustWorkspace } from "./trust.js";
@@ -128,6 +129,7 @@ export interface AgentSetup {
   sandbox?: SandboxPolicy | undefined;
   lsp?: ReturnType<typeof createLspTool> | undefined;
   artifacts?: ReturnType<typeof createArtifactTool> | undefined;
+  browser?: ReturnType<typeof createBrowserTool> | undefined;
   trust: TrustState;
   telemetry?: { flush(): Promise<boolean> } | undefined;
 }
@@ -385,28 +387,42 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     options.bare === true || options.safeMode === true || settings.artifacts?.enabled === false
       ? undefined
       : createArtifactTool({ store: new ArtifactStore(join(home, "artifacts")) });
-  let browserTool: Tool | undefined;
+  let browserTool: ReturnType<typeof createBrowserTool> | undefined;
   const browserSettings = trusted ? settings.browser : undefined;
-  if (
-    options.bare !== true &&
-    options.safeMode !== true &&
-    browserSettings?.enabled !== false &&
-    typeof browserSettings?.driver === "string"
-  ) {
+  const browserEnabled =
+    browserSettings !== undefined &&
+    browserSettings.enabled !== false &&
+    (browserSettings.enabled === true || typeof browserSettings.driver === "string");
+  if (options.bare !== true && options.safeMode !== true && browserEnabled) {
     try {
-      const module = (await import(
-        pathToFileURL(resolve(cwd, browserSettings.driver)).href
-      )) as {
-        createBrowserDriver?: (options: unknown) => BrowserDriver | Promise<BrowserDriver>;
-        default?: BrowserDriver;
-      };
-      const driver =
-        module.createBrowserDriver !== undefined
-          ? await module.createBrowserDriver({})
-          : module.default;
-      if (driver === undefined) {
-        warnings.push("Browser driver module exports neither createBrowserDriver nor a default driver.");
+      let driver: BrowserDriver | undefined;
+      if (typeof browserSettings.driver === "string") {
+        const module = (await import(
+          pathToFileURL(resolve(cwd, browserSettings.driver)).href
+        )) as {
+          createBrowserDriver?: (options: unknown) => BrowserDriver | Promise<BrowserDriver>;
+          default?: BrowserDriver;
+        };
+        driver =
+          module.createBrowserDriver !== undefined
+            ? await module.createBrowserDriver({})
+            : module.default;
+        if (driver === undefined) {
+          warnings.push(
+            "Browser driver module exports neither createBrowserDriver nor a default driver.",
+          );
+        }
       } else {
+        driver = await createPlaywrightDriver({
+          ...(browserSettings.channel === undefined ? {} : { channel: browserSettings.channel }),
+          ...(browserSettings.executablePath === undefined
+            ? {}
+            : { executablePath: browserSettings.executablePath }),
+          ...(browserSettings.headless === undefined ? {} : { headless: browserSettings.headless }),
+          ...(browserSettings.timeoutMs === undefined ? {} : { timeoutMs: browserSettings.timeoutMs }),
+        });
+      }
+      if (driver !== undefined) {
         browserTool = createBrowserTool({
           driver,
           allowedDomains: browserSettings.allowedDomains ?? [],
@@ -795,6 +811,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     ...(sandbox === undefined ? {} : { sandbox }),
     ...(lspTool === undefined ? {} : { lsp: lspTool }),
     ...(artifactsTool === undefined ? {} : { artifacts: artifactsTool }),
+    ...(browserTool === undefined ? {} : { browser: browserTool }),
     trust: {
       trusted,
       changed,

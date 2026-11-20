@@ -107,4 +107,30 @@ describe("T-I4: browser automation", () => {
       await Promise.all(setup.mcpClients.map((client) => client.close()));
     }
   });
+
+  it("enables the built-in Playwright driver from browser settings", async () => {
+    const home = makeHome();
+    const ws = makeWorkspace();
+    writeJson(join(home, "settings.json"), {
+      browser: {
+        enabled: true,
+        channel: "chrome",
+        allowedDomains: ["example.com"],
+      },
+    });
+    const setup = await createAgentSetup({
+      cwd: ws,
+      home,
+      provider: "fake",
+      trust: true,
+      env: { ...process.env, KEYCODE_HOME: home, KEYCODE_PROVIDER: "fake" },
+    });
+    try {
+      expect(setup.toolNames).toContain("Browser");
+      expect(setup.browser).toBeDefined();
+    } finally {
+      await setup.browser?.stop();
+      await Promise.all(setup.mcpClients.map((client) => client.close()));
+    }
+  });
 });

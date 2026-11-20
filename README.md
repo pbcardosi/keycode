@@ -270,22 +270,38 @@ It runs JavaScript in a `node:vm` context with a persistent `state` object, a
 `console.log` bridge, and `tools.call(name, input)`. It is permission-gated and
 is not a security boundary.
 
-**Browser** automation loads a driver module from a trusted workspace:
+**Browser** automation works out of the box through `playwright-core` and an
+installed Chrome:
+
+```json
+{
+  "browser": {
+    "enabled": true,
+    "allowedDomains": ["example.com", "docs.example.com"],
+    "headless": true
+  }
+}
+```
+
+Set `channel` (default `chrome`), `executablePath`, `headless`, and `timeoutMs`
+as needed. The driver launches lazily on the first navigation and closes with
+the session.
+
+A custom driver module is still supported:
 
 ```json
 {
   "browser": {
     "driver": "./browser-driver.mjs",
-    "allowedDomains": ["example.com", "docs.example.com"]
+    "allowedDomains": ["example.com"]
   }
 }
 ```
 
-The driver module must export `createBrowserDriver(options)` or a default
-driver with `navigate`, `click`, `type`, `readDom`, and `screenshot`. Playwright,
-CDP, or another automation library can live in that module. Origins outside the
-allowlist are denied before the driver is called. Browser settings are ignored
-in untrusted workspaces.
+The module must export `createBrowserDriver(options)` or a default driver with
+`navigate`, `click`, `type`, `readDom`, `screenshot`, and optional `close`.
+Origins outside the allowlist are denied before the driver is called. Browser
+settings are ignored in untrusted workspaces. `--restricted` removes the tool.
 
 ---
 

@@ -58,6 +58,10 @@ export const BrowserSchema = z
     enabled: z.boolean().optional(),
     driver: z.string().optional(),
     allowedDomains: z.array(z.string()).optional(),
+    channel: z.string().optional(),
+    executablePath: z.string().optional(),
+    headless: z.boolean().optional(),
+    timeoutMs: z.number().int().positive().optional(),
   })
   .passthrough();
 
