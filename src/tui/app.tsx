@@ -6,6 +6,8 @@ import type { AgentSetup } from "../app/factory.js";
 import { executeCommand } from "../app/commands.js";
 import { renderMarkdown, renderToolRow, spinnerFrame, renderTodos, renderFooter } from "./format.js";
 import { saveDraft } from "./input.js";
+import type { PermissionBroker, PendingPermission } from "./permission.js";
+import type { PromptChoice } from "../permissions/pipeline.js";
 
 const MAX_TRANSCRIPT = 200;
 
@@ -35,10 +37,25 @@ interface ToolRow {
 
 interface TuiAppProps {
   setup: AgentSetup;
+  permissions?: PermissionBroker | undefined;
   onClear?: (() => void) | undefined;
 }
 
-export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
+const PERMISSION_CHOICES: Record<string, PromptChoice> = {
+  "1": { behavior: "allow_once" },
+  y: { behavior: "allow_once" },
+  "2": { behavior: "allow_always" },
+  a: { behavior: "allow_always" },
+  "3": { behavior: "allow_session" },
+  s: { behavior: "allow_session" },
+  "4": { behavior: "deny" },
+  n: { behavior: "deny" },
+  "5": { behavior: "cancel" },
+  c: { behavior: "cancel" },
+  q: { behavior: "cancel" },
+};
+
+export function TuiApp({ setup, permissions, onClear }: TuiAppProps): React.ReactElement {
   const { agent } = setup;
   const initial = setup.store.load(setup.sessionId);
   const [messages, setMessages] = useState<Message[]>(initial.messages);
@@ -48,14 +65,28 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
   const [todos, setTodos] = useState(agent.state.todos);
   const [spinner, setSpinner] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [permission, setPermission] = useState<PendingPermission | null>(null);
   const app = useApp();
   const { stdin, setRawMode, isRawModeSupported } = useStdin();
   const controllerRef = useRef(new AbortController());
   const inputRef = useRef("");
   const busyRef = useRef(false);
+  const permissionRef = useRef<PendingPermission | null>(null);
   const submitRef = useRef<(line: string) => void>(() => undefined);
   inputRef.current = input;
   busyRef.current = busy;
+  permissionRef.current = permission;
+
+  useEffect(() => {
+    if (!permissions) return;
+    const update = (): void => setPermission(permissions.current);
+    update();
+    const unsubscribe = permissions.subscribe(update);
+    return () => {
+      unsubscribe();
+      permissions.cancelAll();
+    };
+  }, [permissions]);
 
   useEffect(() => {
     if (typeof setRawMode === "function" && isRawModeSupported) setRawMode(true);
@@ -71,6 +102,17 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
       let index = 0;
       while (index < text.length) {
         const char = text[index] ?? "";
+        if (permissionRef.current) {
+          if (char === "\x1b" || char === "\x03") {
+            permissions?.resolveCurrent({ behavior: "cancel" });
+            index += 1;
+            continue;
+          }
+          const choice = PERMISSION_CHOICES[char];
+          if (choice) permissions?.resolveCurrent(choice);
+          index += 1;
+          continue;
+        }
         if (char === "\x1b") {
           const next = text[index + 1];
           if (next === "[" || next === "O") {
@@ -129,7 +171,7 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
       stdin.off("data", handleData);
       stdin.off("end", onEnd);
     };
-  }, [stdin, app]);
+  }, [stdin, app, permissions]);
 
   useEffect(() => {
     const unsubscribe = agent.subscribe((event: AgentEvent) => {
@@ -212,7 +254,11 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
     costUsd: agent.costUsd,
     branch: null,
     checkpoints: setup.store.load(setup.sessionId).checkpoints.length,
-    progress: busy ? `${spinnerFrame(spinner)} generating` : undefined,
+    progress: permission
+      ? "waiting for approval"
+      : busy
+        ? `${spinnerFrame(spinner)} generating`
+        : undefined,
   });
 
   return (
@@ -257,11 +303,26 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
         )}
         {todos.length > 0 && <Text dimColor>{renderTodos(todos)}</Text>}
       </Box>
-      <Box>
-        <Text color="cyan">{"› "}</Text>
-        <Text>{input}</Text>
-        <Text dimColor>{busy ? "  Esc aborts" : "  Enter to send · Esc to exit"}</Text>
-      </Box>
+      {permission && (
+        <Box borderStyle="round" borderColor="yellow" flexDirection="column" paddingX={1} marginBottom={1}>
+          <Text color="yellow">Permission required: {permission.request.tool}</Text>
+          <Text>{permission.decision.reason}</Text>
+          {permission.request.preview && <Text dimColor>{permission.request.preview}</Text>}
+          {permission.request.diff && <Text>{permission.request.diff}</Text>}
+          <Text color="cyan">
+            [1] allow once  [2] allow always  [3] allow for session  [4] deny  [5] cancel
+          </Text>
+        </Box>
+      )}
+      {permission ? (
+        <Text dimColor>Choose 1-5 · Esc cancels</Text>
+      ) : (
+        <Box>
+          <Text color="cyan">{"› "}</Text>
+          <Text>{input}</Text>
+          <Text dimColor>{busy ? "  Esc aborts" : "  Enter to send · Esc to exit"}</Text>
+        </Box>
+      )}
       <Text dimColor>{footer}</Text>
     </Box>
   );
@@ -269,6 +330,7 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
 
 export interface RunTuiOptions {
   setup: AgentSetup;
+  permissions?: PermissionBroker | undefined;
   onClear?: (() => void) | undefined;
 }
 
@@ -279,9 +341,14 @@ export interface RunTuiResult {
 }
 
 export function runTui(options: RunTuiOptions): RunTuiResult {
-  const app = render(<TuiApp setup={options.setup} onClear={options.onClear} />, {
-    exitOnCtrlC: false,
-  });
+  const app = render(
+    <TuiApp
+      setup={options.setup}
+      permissions={options.permissions}
+      onClear={options.onClear}
+    />,
+    { exitOnCtrlC: false },
+  );
   return {
     waitUntilExit: async () => {
       await app.waitUntilExit();
@@ -289,7 +356,13 @@ export function runTui(options: RunTuiOptions): RunTuiResult {
     },
     unmount: () => app.unmount(),
     rerender(setup: AgentSetup): void {
-      app.rerender(<TuiApp setup={setup} onClear={options.onClear} />);
+      app.rerender(
+        <TuiApp
+          setup={setup}
+          permissions={options.permissions}
+          onClear={options.onClear}
+        />,
+      );
     },
   };
 }

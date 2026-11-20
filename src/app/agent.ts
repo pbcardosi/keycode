@@ -18,8 +18,12 @@ import type { SessionStore } from "../storage/session.js";
 import type { CheckpointStore, RewindMode } from "../storage/checkpoints.js";
 import type { PermissionService } from "../permissions/pipeline.js";
 import type { BudgetGuard, Pricing } from "../providers/budget.js";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { KeycodeError, isKeycodeError } from "../util/errors.js";
 import { newId } from "../util/ids.js";
+import { isInside } from "../util/paths.js";
+import { unifiedDiff } from "../tools/edit.js";
 import { systemClock, type Clock } from "../util/clock.js";
 import { silentLogger, type Logger } from "../util/logger.js";
 import { toolSpecs } from "../tools/index.js";
@@ -106,6 +110,54 @@ function schemaMessage(error: {
   return error.issues
     .map((issue) => `${issue.path.length > 0 ? issue.path.map(String).join(".") : "input"}: ${issue.message}`)
     .join("; ");
+}
+
+function permissionPreview(
+  tool: Tool,
+  input: unknown,
+  cwd: string,
+): { preview?: string | undefined; diff?: string | undefined } {
+  if (input === null || typeof input !== "object") return {};
+  const record = input as Record<string, unknown>;
+  if (typeof record.command === "string") return { preview: `$ ${record.command}` };
+
+  const pathValue = typeof record.file_path === "string" ? record.file_path : undefined;
+  if (!pathValue) return {};
+  const absolute = resolve(cwd, pathValue);
+
+  if (tool.name === "Write" && typeof record.content === "string") {
+    const lines = record.content.split(/\r?\n/);
+    return {
+      preview: `Write ${pathValue} (${lines.length} lines)\n${lines.slice(0, 12).join("\n")}${
+        lines.length > 12 ? "\n..." : ""
+      }`,
+    };
+  }
+
+  const oldString = record.old_string;
+  const newString = record.new_string;
+  if (
+    tool.name === "Edit" &&
+    typeof oldString === "string" &&
+    typeof newString === "string" &&
+    isInside(cwd, absolute)
+  ) {
+    try {
+      const before = readFileSync(absolute, "utf8");
+      const after =
+        record.replace_all === true
+          ? before.split(oldString).join(newString)
+          : before.replace(oldString, newString);
+      if (after !== before) {
+        const diff = unifiedDiff(pathValue, before, after);
+        return { diff: diff.length > 4_000 ? `${diff.slice(0, 4_000)}\n...` : diff };
+      }
+    } catch {
+      // Fall back to a simple preview if the file cannot be read.
+    }
+  }
+
+  return { preview: `${tool.name} ${pathValue}` };
 }
 
 export class Agent {
@@ -378,11 +430,14 @@ export class Agent {
 
     let result: ToolResult;
     try {
+      const preview = permissionPreview(tool, effectiveInput, this.options.cwd);
       const decision = await this.options.permissions.check({
         tool: call.name,
         input: effectiveInput,
         cwd: this.options.cwd,
         readOnly: tool.readOnly,
+        ...(preview.preview === undefined ? {} : { preview: preview.preview }),
+        ...(preview.diff === undefined ? {} : { diff: preview.diff }),
       });
       if (decision.behavior === "deny") {
         result = {

@@ -1,6 +1,12 @@
+import { createElement } from "react";
+import { render } from "ink";
+import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { AuditLog } from "../../dist/permissions/audit.js";
 import { PermissionService, type PromptChoice } from "../../dist/permissions/pipeline.js";
+import { createAgentSetup } from "../../dist/app/factory.js";
+import { PermissionBroker } from "../../dist/tui/permission.js";
+import { TuiApp } from "../../dist/tui/app.js";
 import { makeHome, makeWorkspace } from "../helpers.js";
 
 describe("T-S3: permission prompt", () => {
@@ -41,5 +47,44 @@ describe("T-S3: permission prompt", () => {
     await expect(
       cancelService.check({ tool: "Bash", input: { command: "echo hi" }, cwd, readOnly: false }),
     ).rejects.toMatchObject({ code: "ABORTED" });
+  });
+
+  it("renders a TUI permission dialog and resolves allow-always", async () => {
+    const home = makeHome();
+    const ws = makeWorkspace();
+    const setup = await createAgentSetup({ cwd: ws, home, provider: "fake", trust: true });
+    const broker = new PermissionBroker();
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    let output = "";
+    stdout.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+    });
+
+    const app = render(createElement(TuiApp, { setup, permissions: broker }), {
+      stdin,
+      stdout,
+      patchConsole: false,
+      exitOnCtrlC: false,
+    });
+    const answer = broker.ask(
+      {
+        tool: "Bash",
+        input: { command: "echo hi" },
+        cwd: ws,
+        readOnly: false,
+        preview: "$ echo hi",
+      },
+      { behavior: "ask", reason: "Manual mode requires approval", source: "mode" },
+    );
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 150));
+    expect(output).toContain("Permission required");
+    expect(output).toContain("Bash");
+    expect(output).toContain("$ echo hi");
+
+    stdin.write("2");
+    const choice = await answer;
+    expect(choice.behavior).toBe("allow_always");
+    app.unmount();
   });
 });

@@ -4,6 +4,8 @@ import type { AgentEvent } from "../app/agent.js";
 import { createAgentSetup, type AgentSetup, type AgentSetupOptions } from "../app/factory.js";
 import type { Usage } from "../contracts/message.js";
 import { KeycodeError, toKeycodeError, formatError } from "../util/errors.js";
+import type { PermissionPrompter } from "../permissions/pipeline.js";
+import { PermissionBroker } from "../tui/permission.js";
 import { runTui } from "../tui/app.js";
 
 export type OutputFormat = "text" | "json" | "stream-json";
@@ -194,14 +196,16 @@ export async function runHeadless(options: HeadlessOptions): Promise<HeadlessRes
 }
 
 export async function runInteractive(
-  factory: () => Promise<AgentSetup>,
+  factory: (prompter: PermissionPrompter) => Promise<AgentSetup>,
 ): Promise<number> {
-  const initial = await factory();
+  const permissions = new PermissionBroker();
+  const initial = await factory(permissions);
   for (const warning of initial.warnings) process.stderr.write(`warning: ${warning}\n`);
   const tui = runTui({
     setup: initial,
+    permissions,
     onClear: () => {
-      void factory().then((next) => tui.rerender(next));
+      void factory(permissions).then((next) => tui.rerender(next));
     },
   });
   return tui.waitUntilExit();

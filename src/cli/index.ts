@@ -185,8 +185,8 @@ program
       return;
     }
 
-    const code = await runInteractive(async () => {
-      const setup = await createAgentSetup(setupOptions(options));
+    const code = await runInteractive(async (prompter) => {
+      const setup = await createAgentSetup({ ...setupOptions(options), prompter });
       if (setup.warnings.length > 0) {
         for (const warning of setup.warnings) process.stderr.write(`warning: ${warning}\n`);
       }
