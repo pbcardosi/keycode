@@ -86,8 +86,21 @@ export function createEditTool(): Tool<EditInputType> {
 
       const occurrences = countOccurrences(before, oldString);
       if (occurrences === 0) {
+        if (newString.length > 0 && before.includes(newString)) {
+          return {
+            ok: true,
+            content: [
+              {
+                type: "text",
+                text: `No change needed: ${input.file_path} already contains the requested text. Verify with Read, then stop.`,
+              },
+            ],
+            display: `No change needed: ${input.file_path}`,
+            metadata: { path, alreadyApplied: true },
+          };
+        }
         return toolError(
-          `old_string was not found in ${input.file_path}. Re-read the file and match the exact text, including whitespace.`,
+          `old_string was not found in ${input.file_path}. Re-read the file and match the exact text, including whitespace. If you already applied this change, verify with Read and stop; do not retry the same edit.`,
         );
       }
       if (occurrences > 1 && input.replace_all !== true) {

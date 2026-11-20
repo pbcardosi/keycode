@@ -31,6 +31,20 @@ describe("T-T5: Edit", () => {
     );
     expect(unique.ok).toBe(true);
     expect(readFileSync(join(ws, "e.txt"), "utf8")).toBe("delta\nzeta\ndelta\n");
+
+    const alreadyApplied = await tool.execute(
+      { file_path: "e.txt", old_string: "alpha", new_string: "delta" },
+      ctx,
+    );
+    expect(alreadyApplied.ok).toBe(true);
+    expect((alreadyApplied.metadata as { alreadyApplied?: boolean } | undefined)?.alreadyApplied).toBe(true);
+    expect(readFileSync(join(ws, "e.txt"), "utf8")).toBe("delta\nzeta\ndelta\n");
+
+    const missing = await tool.execute(
+      { file_path: "e.txt", old_string: "missing", new_string: "not-there" },
+      ctx,
+    );
+    expect(missing.ok).toBe(false);
   });
 
   it("returns a unified diff", () => {
