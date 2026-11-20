@@ -11,6 +11,7 @@ import { createWebFetchTool } from "./webfetch.js";
 import { createWebSearchTool } from "./websearch.js";
 import { createNotebookEditTool } from "./notebook.js";
 import { createTaskTool } from "./tasks.js";
+import { createCodeModeTool } from "./codemode.js";
 import type { Tool } from "../contracts/tool.js";
 import type { ToolSpec } from "../contracts/provider.js";
 import { z } from "zod";
@@ -30,6 +31,7 @@ export function createCoreTools(): Tool[] {
     createWebSearchTool({ provider: null }),
     createNotebookEditTool(),
     createTaskTool(),
+    createCodeModeTool(),
   ];
 }
 

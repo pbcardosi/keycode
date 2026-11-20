@@ -265,7 +265,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     ? baseTools
     : [...baseTools, createSkillTool(skills)];
   const managedDenied = managedDeniedTools(home, env);
-  const restrictedDenied = new Set(["Bash", "PowerShell", "Agent", "WebFetch"]);
+  const restrictedDenied = new Set(["Bash", "PowerShell", "Agent", "WebFetch", "CodeMode"]);
   const allowedByFlag = options.allowedTools ?? [];
   const tools = [
     ...withExtensions,

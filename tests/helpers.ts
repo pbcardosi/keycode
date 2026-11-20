@@ -99,6 +99,24 @@ export function uuid(): string {
   return randomUUID();
 }
 
+export function writeFakeLspServer(path: string): void {
+  const script = [
+    'let buffer = Buffer.alloc(0);',
+    'function send(msg) { const body = JSON.stringify(msg); process.stdout.write(`Content-Length: ${Buffer.byteLength(body)}\\r\\n\\r\\n${body}`); }',
+    'function handle(msg) {',
+    '  if (msg.method === "textDocument/didOpen") { send({ jsonrpc: "2.0", method: "textDocument/publishDiagnostics", params: { uri: msg.params.textDocument.uri, diagnostics: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 3 } }, severity: 1, message: "fake diagnostic" }] } }); return; }',
+    '  if (msg.id === undefined) return;',
+    '  const respond = (result) => send({ jsonrpc: "2.0", id: msg.id, result });',
+    '  if (msg.method === "initialize") respond({ capabilities: { hoverProvider: true, definitionProvider: true, referencesProvider: true, textDocumentSync: 1 } });',
+    '  else if (msg.method === "textDocument/hover") respond({ contents: { kind: "plaintext", value: "hover text" } });',
+    '  else if (msg.method === "textDocument/definition") respond({ uri: "file:///def.ts", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } });',
+    '  else if (msg.method === "textDocument/references") respond([{ uri: "file:///ref.ts", range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } }]);',
+    '}',
+    'process.stdin.on("data", (chunk) => { buffer = Buffer.concat([buffer, chunk]); while (true) { const headerEnd = buffer.indexOf("\\r\\n\\r\\n"); if (headerEnd === -1) return; const header = buffer.subarray(0, headerEnd).toString(); const m = /Content-Length:\\s*(\\d+)/i.exec(header); const start = headerEnd + 4; if (!m) { buffer = buffer.subarray(start); continue; } const length = Number(m[1]); if (buffer.length < start + length) return; const body = buffer.subarray(start, start + length).toString(); buffer = buffer.subarray(start + length); try { handle(JSON.parse(body)); } catch {} } });',
+  ].join("\n");
+  writeFileSync(path, script);
+}
+
 export function writeFakeMcpServer(path: string): void {
   const script = [
     'let buffer = "";',
