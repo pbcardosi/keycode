@@ -41,6 +41,11 @@ Two REA paths were attempted and blocked:
 Per `AGENTS.md`, the unchanged failing calls were not retried. A lighter,
 direct method was used instead.
 
+The REA retained-evidence bundle for this session reported zero records for the
+target SHA-256, so no REA evidence IDs are cited. The offsets, hashes, and
+counts below are reproducible directly from the artifact and the extraction
+scripts described here.
+
 ---
 
 ## 3. Method
@@ -142,7 +147,7 @@ The extracted `cli.js` begins with:
 
 `claude --help` reports:
 
-- 20 subcommands, including `agents`, `attach`, `auth`, `auto-mode`, `doctor`,
+- 18 subcommands, including `agents`, `attach`, `auth`, `auto-mode`, `doctor`,
   `gateway`, `import`, `install`, `logs`, `mcp`, `plugin`, `purge`, `respawn`,
   `rm`, `setup-token`, `stop`, `ultrareview`, and `update`.
 - More than 100 options, including `--print`, `--output-format`,
@@ -186,10 +191,16 @@ Additional commands are defined with getters or runtime conditions and were
 observed separately:
 
 ```
-login, init, doctor, review, security-review, pr-comments, terminal-setup,
-vim, sandbox, remote-control, goal, recap, batch, ultraplan, ultrareview,
-worktree, install, purge, agents, background, stop, list-agents
+login, init, terminal-setup, remote-control, workflows, goal, recap, batch,
+ultraplan, ultrareview, install, import, background, stop, list-agents
 ```
+
+`/doctor` is documented in `claude --help` and the changelog but was not
+matched by the registry scan. PR review commands such as `/review`,
+`/security-review`, and `/pr-comments` are described in public documentation
+and the changelog; not all of them were confirmed in the 2.1.322 command
+registry. They are product features in `SPEC.md` (I9), not claims that every
+one is a 2.1.322 slash command.
 
 Aliases observed include `settings` for `config`, `cost` and `stats` for
 `usage`, `checkpoint` and `undo` for `rewind`, `reset` and `new` for `clear`,
