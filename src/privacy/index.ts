@@ -54,7 +54,7 @@ export class TelemetryRecorder {
 
   record(event: Omit<TelemetryEvent, "timestamp">): void {
     if (!this.enabled) return;
-    this.events.push({ type: event.type, ...event, timestamp: new Date().toISOString() });
+    this.events.push({ ...event, type: event.type, timestamp: new Date().toISOString() });
   }
 
   get recorded(): TelemetryEvent[] {
