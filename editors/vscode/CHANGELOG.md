@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Track the CLI 0.1.2 release.
+- Install the CLI from npm with `npm install -g keycode-ai`.
+
 ## 0.1.1
 
 - Track the CLI 0.1.1 patch release.

@@ -1,4 +1,4 @@
-﻿# KeyCode
+# KeyCode
 
 A free, local-first, bring-your-own-key coding agent for the terminal.
 
@@ -28,23 +28,38 @@ See `FEATURES.md` for the full free-key matrix.
 
 ## Install
 
-The npm package name is `keycode-ai`, but it is not published to the registry
-yet. Build a tarball and install it globally:
-
 ```bash
-npm install
-npm run pack:smoke      # verifies the tarball in a clean consumer project
-npm pack
-npm install -g ./keycode-ai-0.1.1.tgz
+npm install -g keycode-ai
 keycode --version
 ```
 
-Or link the working tree while developing:
+The package ships `dist/`, `README.md`, `LICENSE`, and `CHANGELOG.md` only.
+Tests, sources, and `node_modules` are excluded. `scripts/validate-package.mjs`
+checks the bin mapping, version, shebang, and license. CI runs `npm run verify`
+on Windows, macOS, and Linux with Node 22 and 24, plus a tarball install test.
+
+Alternatives:
+
+- Windows x64: download `keycode-<version>-win-x64.zip` from the
+  [releases page](https://github.com/pbcardosi/keycode/releases), unzip it, and
+  run `keycode.exe`. The zip bundles Node.js and the CLI.
+- macOS and Linux: `brew tap pbcardosi/keycode && brew install keycode`.
+- VS Code: install `keycode-vscode-<version>.vsix` from the releases page.
+
+### From source
 
 ```bash
 npm install
 npm run build
 npm link
+keycode --version
+```
+
+Build a tarball and install it globally:
+
+```bash
+npm pack
+npm install -g ./keycode-ai-<version>.tgz
 keycode --version
 ```
 
@@ -59,14 +74,9 @@ node dist/cli/index.js --provider ollama
 ### Upgrade and remove
 
 ```bash
-npm install -g ./keycode-ai-<new-version>.tgz
+npm install -g keycode-ai@latest
 npm uninstall -g keycode-ai
 ```
-
-The package ships `dist/`, `README.md`, `LICENSE`, and `CHANGELOG.md` only.
-Tests, sources, and `node_modules` are excluded. `scripts/validate-package.mjs`
-checks the bin mapping, version, shebang, and license. CI runs `npm run verify`
-on Windows, macOS, and Linux with Node 22 and 24, plus a tarball install test.
 
 ---
 
@@ -196,8 +206,11 @@ same web UI in a VS Code editor tab.
 ```powershell
 cd editors/vscode
 npx @vscode/vsce package
-code --install-extension keycode-vscode-0.1.1.vsix
+code --install-extension keycode-vscode-0.1.2.vsix
 ```
+
+You can also download the packaged VSIX from the
+[releases page](https://github.com/pbcardosi/keycode/releases).
 
 Then run **KeyCode: Open Chat** from the Command Palette. The extension has
 settings for executable, provider, model, permission mode, working directory,

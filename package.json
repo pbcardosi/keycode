@@ -1,6 +1,6 @@
 {
   "name": "keycode-ai",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": false,
   "type": "module",
   "description": "KeyCode — a free, local-first, bring-your-own-key coding agent.",
@@ -53,5 +53,13 @@
     "@types/react": "^19.0.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pbcardosi/keycode.git"
+  },
+  "homepage": "https://github.com/pbcardosi/keycode#readme",
+  "bugs": {
+    "url": "https://github.com/pbcardosi/keycode/issues"
   }
 }

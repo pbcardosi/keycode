@@ -4,6 +4,23 @@ All notable changes are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning.
 
+## [0.1.2] - 2026-11-20
+
+Packaging and distribution release.
+
+### Added
+
+- Windows x64 portable build with bundled Node.js, published as a release
+  artifact.
+- Validated winget manifests under `packaging/winget` for the portable build.
+- Homebrew tap at `pbcardosi/homebrew-keycode`.
+- npm repository, homepage, and issue-tracker metadata.
+
+### Changed
+
+- Installation docs now cover npm, Homebrew, the Windows portable build, the
+  VSIX, and tarball verification.
+
 ## [0.1.1] - 2026-11-20
 
 Cross-platform fixes found by the first CI release run.
