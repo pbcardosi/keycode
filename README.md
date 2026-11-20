@@ -224,8 +224,24 @@ and character inputs are 1-based. Requests time out; a failing server returns an
 error result instead of breaking the turn.
 
 keycode does not bundle language servers. Install them separately or point at
-an absolute path. `--bare` and `--safe-mode` skip LSP; `--restricted` removes the
-`LSP` tool.
+an absolute path. For TypeScript projects without a local `typescript`
+installation, point the server at a `tsserver.js`:
+
+```json
+{
+  "lsp": {
+    "typescript": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"],
+      "initializationOptions": {
+        "tsserver": { "path": "C:/Users/me/AppData/Roaming/npm/node_modules/typescript/lib/tsserver.js" }
+      }
+    }
+  }
+}
+```
+
+`--bare` and `--safe-mode` skip LSP; `--restricted` removes the `LSP` tool.
 
 ---
 

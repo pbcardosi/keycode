@@ -90,7 +90,9 @@ function deepMerge(base: Settings, next: Settings): Settings {
 function readLayer(path: string, warnings: string[]): Settings | null {
   if (!existsSync(path)) return null;
   try {
-    const raw = JSON.parse(readFileSync(path, "utf8")) as unknown;
+    const raw = JSON.parse(
+      readFileSync(path, "utf8").replace(/^\uFEFF/, ""),
+    ) as unknown;
     const parsed = SettingsSchema.safeParse(raw);
     if (!parsed.success) {
       warnings.push(

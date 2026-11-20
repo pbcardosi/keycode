@@ -49,6 +49,7 @@ export const LspServerSchema = z
     args: z.array(z.string()).optional(),
     language: z.string().optional(),
     timeoutMs: z.number().int().positive().optional(),
+    initializationOptions: z.record(z.string(), z.unknown()).optional(),
   })
   .passthrough();
 

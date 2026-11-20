@@ -25,6 +25,15 @@ describe("T-O1: settings hierarchy", () => {
     expect(invalid.warnings.some((warning) => warning.includes("Ignoring invalid settings file"))).toBe(true);
   });
 
+  it("accepts settings files with a UTF-8 BOM", () => {
+    const home = makeHome();
+    const ws = makeWorkspace();
+    writeText(join(home, "settings.json"), `\uFEFF${JSON.stringify({ model: "bom-model" })}`);
+    const loaded = loadSettings({ cwd: ws, home, env: {} });
+    expect(loaded.settings.model).toBe("bom-model");
+    expect(loaded.warnings).toEqual([]);
+  });
+
   it("interpolates environment variables in settings", () => {
     const home = makeHome();
     const ws = makeWorkspace();

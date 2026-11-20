@@ -1,5 +1,17 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { KeycodeError } from "../util/errors.js";
+
+function launch(command: string, args: string[]): { command: string; args: string[]; shell: boolean } {
+  if (process.platform !== "win32") return { command, args, shell: false };
+  if (/\.(exe|com)$/i.test(command)) return { command, args, shell: false };
+  const quote = (value: string): string =>
+    /[\s"]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  return {
+    command: [command, ...args].map(quote).join(" "),
+    args: [],
+    shell: true,
+  };
+}
 
 export interface LspOptions {
   command: string;
@@ -7,6 +19,8 @@ export interface LspOptions {
   cwd: string;
   rootUri?: string | undefined;
   timeoutMs?: number | undefined;
+  initializationOptions?: Record<string, unknown> | undefined;
+  onNotification?: ((method: string, params: unknown) => void) | undefined;
 }
 
 export interface LspDiagnostic {
@@ -31,6 +45,15 @@ interface JsonRpcMessage {
   error?: { code: number; message: string };
 }
 
+function uriKey(uri: string): string {
+  try {
+    const decoded = decodeURIComponent(uri).replace(/\\/g, "/");
+    return decoded.startsWith("file:") ? decoded.toLowerCase() : decoded;
+  } catch {
+    return uri;
+  }
+}
+
 export class LspClient {
   private readonly options: LspOptions;
   private child: ChildProcessWithoutNullStreams | null = null;
@@ -39,6 +62,7 @@ export class LspClient {
   private readonly pending = new Map<number, Pending>();
   private readonly diagnostics = new Map<string, LspDiagnostic[]>();
   private readonly waiters = new Map<string, (diagnostics: LspDiagnostic[]) => void>();
+  private stderrText = "";
 
   constructor(options: LspOptions) {
     this.options = options;
@@ -49,13 +73,18 @@ export class LspClient {
   }
 
   async start(): Promise<void> {
-    const child = spawn(this.options.command, this.options.args ?? [], {
+    const spec = launch(this.options.command, this.options.args ?? []);
+    const child = spawn(spec.command, spec.args, {
       cwd: this.options.cwd,
       windowsHide: true,
+      shell: spec.shell,
       stdio: ["pipe", "pipe", "pipe"],
     });
     this.child = child;
     child.stdout.on("data", (chunk: Buffer) => this.onData(chunk));
+    child.stderr.on("data", (chunk: Buffer) => {
+      this.stderrText = `${this.stderrText}${chunk.toString("utf8")}`.slice(-4_000);
+    });
     child.on("error", (error) => {
       for (const pending of this.pending.values()) {
         clearTimeout(pending.timer);
@@ -63,9 +92,9 @@ export class LspClient {
       }
       this.pending.clear();
     });
-    await new Promise<void>((resolvePromise) => {
-      child.on("spawn", () => resolvePromise());
-      child.on("error", () => resolvePromise());
+    await new Promise<void>((resolvePromise, rejectPromise) => {
+      child.once("spawn", () => resolvePromise());
+      child.once("error", (error) => rejectPromise(new KeycodeError("MCP_INIT_FAILED", `LSP: ${error.message}`)));
     });
   }
 
@@ -93,6 +122,21 @@ export class LspClient {
     }
   }
 
+  private respond(id: number, method: string, params: unknown): void {
+    let result: unknown = null;
+    if (method === "workspace/configuration") {
+      const items = (params as { items?: unknown[] } | undefined)?.items ?? [];
+      result = items.map(() => ({}));
+    } else if (method === "workspace/workspaceFolders") {
+      result =
+        this.options.rootUri === undefined
+          ? []
+          : [{ uri: this.options.rootUri, name: "workspace" }];
+    }
+    this.options.onNotification?.(`client:${method}`, params);
+    this.send({ jsonrpc: "2.0", id, result });
+  }
+
   private handle(message: JsonRpcMessage): void {
     if (message.id !== undefined) {
       const pending = this.pending.get(message.id);
@@ -104,17 +148,25 @@ export class LspClient {
         } else {
           pending.resolve(message.result);
         }
+        return;
+      }
+      if (message.method !== undefined) {
+        this.respond(message.id, message.method, message.params);
       }
       return;
+    }
+    if (message.method !== undefined) {
+      this.options.onNotification?.(message.method, message.params);
     }
     if (message.method === "textDocument/publishDiagnostics") {
       const params = message.params as { uri?: string; diagnostics?: LspDiagnostic[] } | undefined;
       if (params?.uri) {
+        const key = uriKey(params.uri);
         const list = params.diagnostics ?? [];
-        this.diagnostics.set(params.uri, list);
-        const waiter = this.waiters.get(params.uri);
+        this.diagnostics.set(key, list);
+        const waiter = this.waiters.get(key);
         if (waiter) {
-          this.waiters.delete(params.uri);
+          this.waiters.delete(key);
           waiter(list);
         }
       }
@@ -137,7 +189,13 @@ export class LspClient {
     return await new Promise<unknown>((resolvePromise, rejectPromise) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        rejectPromise(new KeycodeError("TOOL_TIMEOUT", `LSP did not answer ${method} in ${timeoutMs} ms`));
+        const detail = this.stderrText.trim();
+        rejectPromise(
+          new KeycodeError(
+            "TOOL_TIMEOUT",
+            `LSP did not answer ${method} in ${timeoutMs} ms${detail.length > 0 ? `: ${detail.slice(-500)}` : ""}`,
+          ),
+        );
       }, timeoutMs);
       this.pending.set(id, { resolve: resolvePromise, reject: rejectPromise, timer });
       try {
@@ -154,22 +212,32 @@ export class LspClient {
     const result = await this.request("initialize", {
       processId: process.pid,
       rootUri: this.options.rootUri ?? null,
-      capabilities: {},
+      capabilities: {
+        workspace: { workspaceFolders: true, configuration: true },
+        textDocument: {
+          synchronization: { dynamicRegistration: false, didSave: true },
+          publishDiagnostics: { relatedInformation: true, versionSupport: false },
+          hover: { contentFormat: ["markdown", "plaintext"] },
+          definition: { linkSupport: true },
+          references: {},
+        },
+      },
       workspaceFolders: null,
+      initializationOptions: this.options.initializationOptions ?? {},
     });
     this.notify("initialized", {});
     return result;
   }
 
   openDocument(uri: string, languageId: string, text: string): void {
-    this.diagnostics.delete(uri);
+    this.diagnostics.delete(uriKey(uri));
     this.notify("textDocument/didOpen", {
       textDocument: { uri, languageId, version: 1, text },
     });
   }
 
   updateDocument(uri: string, text: string, version: number): void {
-    this.diagnostics.delete(uri);
+    this.diagnostics.delete(uriKey(uri));
     this.notify("textDocument/didChange", {
       textDocument: { uri, version },
       contentChanges: [{ text }],
@@ -177,14 +245,21 @@ export class LspClient {
   }
 
   async waitForDiagnostics(uri: string, timeoutMs = 5_000): Promise<LspDiagnostic[]> {
-    const existing = this.diagnostics.get(uri);
+    const key = uriKey(uri);
+    const existing = this.diagnostics.get(key);
     if (existing) return existing;
     return await new Promise<LspDiagnostic[]>((resolvePromise, rejectPromise) => {
       const timer = setTimeout(() => {
-        this.waiters.delete(uri);
-        rejectPromise(new KeycodeError("TOOL_TIMEOUT", `LSP did not publish diagnostics in ${timeoutMs} ms`));
+        this.waiters.delete(key);
+        const detail = this.stderrText.trim();
+        rejectPromise(
+          new KeycodeError(
+            "TOOL_TIMEOUT",
+            `LSP did not publish diagnostics in ${timeoutMs} ms${detail.length > 0 ? `: ${detail.slice(-500)}` : ""}`,
+          ),
+        );
       }, timeoutMs);
-      this.waiters.set(uri, (list) => {
+      this.waiters.set(key, (list) => {
         clearTimeout(timer);
         resolvePromise(list);
       });
@@ -215,7 +290,11 @@ export class LspClient {
 
   stop(): void {
     if (this.child) {
-      this.child.kill();
+      if (process.platform === "win32" && this.child.pid) {
+        spawnSync("taskkill", ["/pid", String(this.child.pid), "/T", "/F"], { windowsHide: true });
+      } else {
+        this.child.kill();
+      }
       this.child = null;
     }
   }

@@ -22,6 +22,7 @@ export interface LspServerConfig {
   args?: string[] | undefined;
   language?: string | undefined;
   timeoutMs?: number | undefined;
+  initializationOptions?: Record<string, unknown> | undefined;
 }
 
 export interface LspToolOptions {
@@ -146,6 +147,9 @@ export function createLspTool(options: LspToolOptions): Tool<LspInputType> & { s
       cwd: options.cwd,
       rootUri: pathToFileURL(options.cwd).href,
       timeoutMs: config.timeoutMs ?? options.timeoutMs ?? 10_000,
+      ...(config.initializationOptions === undefined
+        ? {}
+        : { initializationOptions: config.initializationOptions }),
     });
     await client.start();
     await client.initialize();
@@ -196,7 +200,7 @@ export function createLspTool(options: LspToolOptions): Tool<LspInputType> & { s
         if (input.action === "diagnostics") {
           const diagnostics = await client.waitForDiagnostics(
             uri,
-            target.config.timeoutMs ?? options.timeoutMs ?? 5_000,
+            target.config.timeoutMs ?? options.timeoutMs ?? 15_000,
           );
           if (diagnostics.length === 0) return toolOk(`No diagnostics for ${input.file}.`);
           return toolOk(

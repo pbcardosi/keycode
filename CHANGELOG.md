@@ -46,6 +46,8 @@ First alpha.
 - `vscode://keycode.keycode-vscode/open` deep link for the VS Code extension.
 - `LSP` agent tool for diagnostics, hover, definition, and references, configured
   under `lsp` in settings and started on demand.
+- UTF-8 BOM handling for settings files, and Windows `.cmd` language-server
+  launch support.
 
 ### Known limitations
 
