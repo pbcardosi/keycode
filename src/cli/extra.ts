@@ -451,6 +451,7 @@ export function registerExtraCommands(program: Command): void {
         unsubscribeAgent();
         controller.abort();
         setup.lsp?.stop();
+        setup.artifacts?.stop();
         await Promise.all(setup.mcpClients.map((client) => client.close()));
         setup = await createAgentSetup(buildOptions(overrides));
         currentProvider = setup.providerId;
@@ -615,6 +616,7 @@ export function registerExtraCommands(program: Command): void {
         questions.cancelAll();
         unsubscribeAgent();
         setup.lsp?.stop();
+        setup.artifacts?.stop();
         await Promise.all(setup.mcpClients.map((client) => client.close()));
         await server.close();
       });

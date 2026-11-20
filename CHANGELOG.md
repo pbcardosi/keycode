@@ -50,6 +50,10 @@ First alpha.
   private, loopback, link-local, CGNAT, metadata, and multicast addresses.
 - Write and Edit refuse to introduce new credentials with `SECRET_DETECTED`,
   while still allowing unrelated edits to files that already contain one.
+- First-class `Artifact`, `Browser`, and opt-in `Code Mode` agent tools:
+  versioned HTML previews, a trusted allowlisted browser driver, and a
+  persistent JavaScript tool bridge configured from settings.
+- LSP, browser, and Code Mode configuration is ignored in untrusted workspaces.
 - VS Code extension that starts `keycode remote` and opens the shared web UI in
   a Simple Browser tab, with model, permission, and lifecycle settings.
 - VS Code editor context forwarding: active file and selection reach the web UI

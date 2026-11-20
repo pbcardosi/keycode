@@ -244,6 +244,48 @@ installation, point the server at a `tsserver.js`:
 ```
 
 `--bare` and `--safe-mode` skip LSP; `--restricted` removes the `LSP` tool.
+LSP settings are ignored in untrusted workspaces.
+
+---
+
+## Artifacts, browser, and Code Mode
+
+These are agent tools, not CLI-only features.
+
+**Artifacts** are enabled by default. The `Artifact` tool can create, update,
+list, inspect, comment on, set data for, and preview versioned local HTML files.
+Previews bind to loopback and require a token. Disable them with:
+
+```json
+{ "artifacts": { "enabled": false } }
+```
+
+**Code Mode** is opt-in. Enable it with:
+
+```json
+{ "codeMode": true }
+```
+
+It runs JavaScript in a `node:vm` context with a persistent `state` object, a
+`console.log` bridge, and `tools.call(name, input)`. It is permission-gated and
+is not a security boundary.
+
+**Browser** automation loads a driver module from a trusted workspace:
+
+```json
+{
+  "browser": {
+    "driver": "./browser-driver.mjs",
+    "allowedDomains": ["example.com", "docs.example.com"]
+  }
+}
+```
+
+The driver module must export `createBrowserDriver(options)` or a default
+driver with `navigate`, `click`, `type`, `readDom`, and `screenshot`. Playwright,
+CDP, or another automation library can live in that module. Origins outside the
+allowlist are denied before the driver is called. Browser settings are ignored
+in untrusted workspaces.
 
 ---
 

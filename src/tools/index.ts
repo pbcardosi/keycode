@@ -16,7 +16,16 @@ import type { Tool } from "../contracts/tool.js";
 import type { ToolSpec } from "../contracts/provider.js";
 import { z } from "zod";
 
-export function createCoreTools(): Tool[] {
+export interface CoreToolOptions {
+  codeMode?:
+    | {
+        enabled?: boolean | undefined;
+        tools?: Tool[] | undefined;
+      }
+    | undefined;
+}
+
+export function createCoreTools(options: CoreToolOptions = {}): Tool[] {
   return [
     createBashTool(),
     createPowerShellTool(),
@@ -31,7 +40,10 @@ export function createCoreTools(): Tool[] {
     createWebSearchTool({ provider: null }),
     createNotebookEditTool(),
     createTaskTool(),
-    createCodeModeTool(),
+    createCodeModeTool({
+      enabled: options.codeMode?.enabled === true,
+      ...(options.codeMode?.tools === undefined ? {} : { tools: options.codeMode.tools }),
+    }),
   ];
 }
 

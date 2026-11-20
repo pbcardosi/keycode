@@ -40,6 +40,10 @@ import { narrowPermissionMode, type SubagentRunner } from "./subagent.js";
 import { buildSystemPrompt, promptHash, type SystemPromptOptions } from "../core/context.js";
 import { createCoreTools, toolSpecs } from "../tools/index.js";
 import { createLspTool } from "../tools/lsp.js";
+import { createArtifactTool } from "../tools/artifact.js";
+import { ArtifactStore } from "../artifacts/store.js";
+import { createBrowserTool, type BrowserDriver } from "../integrations/browser.js";
+import { pathToFileURL } from "node:url";
 import { BudgetGuard, type Pricing } from "../providers/budget.js";
 import { isTrusted } from "./trust.js";
 import { Agent } from "./agent.js";
@@ -117,6 +121,7 @@ export interface AgentSetup {
   mcpClients: McpClient[];
   sandbox?: SandboxPolicy | undefined;
   lsp?: ReturnType<typeof createLspTool> | undefined;
+  artifacts?: ReturnType<typeof createArtifactTool> | undefined;
 }
 
 function parseMcpServerSettings(
@@ -326,21 +331,77 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   let subagentRunner: SubagentRunner | undefined;
   const toolRoots = [cwd, ...(options.addDirs ?? []).map((dir) => resolve(cwd, dir))];
   const lspServers =
-    options.bare === true || options.safeMode === true ? {} : (settings.lsp ?? {});
+    options.bare === true || options.safeMode === true
+      ? {}
+      : trusted
+        ? (settings.lsp ?? {})
+        : {};
+  const codeModeEnabled = trusted && settings.codeMode === true;
   const lspTool =
     Object.keys(lspServers).length > 0
       ? createLspTool({ servers: lspServers, cwd, roots: toolRoots })
       : undefined;
+  const toolRegistry: Tool[] = [];
+  const coreTools =
+    options.tools ??
+    createCoreTools({
+      codeMode: { enabled: codeModeEnabled, tools: toolRegistry },
+    });
+  const artifactsTool =
+    options.bare === true || options.safeMode === true || settings.artifacts?.enabled === false
+      ? undefined
+      : createArtifactTool({ store: new ArtifactStore(join(home, "artifacts")) });
+  let browserTool: Tool | undefined;
+  const browserSettings = trusted ? settings.browser : undefined;
+  if (
+    options.bare !== true &&
+    options.safeMode !== true &&
+    browserSettings?.enabled !== false &&
+    typeof browserSettings?.driver === "string"
+  ) {
+    try {
+      const module = (await import(
+        pathToFileURL(resolve(cwd, browserSettings.driver)).href
+      )) as {
+        createBrowserDriver?: (options: unknown) => BrowserDriver | Promise<BrowserDriver>;
+        default?: BrowserDriver;
+      };
+      const driver =
+        module.createBrowserDriver !== undefined
+          ? await module.createBrowserDriver({})
+          : module.default;
+      if (driver === undefined) {
+        warnings.push("Browser driver module exports neither createBrowserDriver nor a default driver.");
+      } else {
+        browserTool = createBrowserTool({
+          driver,
+          allowedDomains: browserSettings.allowedDomains ?? [],
+        });
+      }
+    } catch (error) {
+      warnings.push(`Browser: ${(error as Error).message}`);
+    }
+  }
   const baseTools = [
-    ...(options.tools ?? createCoreTools()),
+    ...coreTools,
     ...(lspTool === undefined ? [] : [lspTool]),
+    ...(artifactsTool === undefined ? [] : [artifactsTool]),
+    ...(browserTool === undefined ? [] : [browserTool]),
     ...mcpTools,
   ];
   const withExtensions = baseTools.some((tool) => tool.name === "Skill")
     ? baseTools
     : [...baseTools, createSkillTool(skills)];
   const managedDenied = managedDeniedTools(home, env);
-  const restrictedDenied = new Set(["Bash", "PowerShell", "Agent", "WebFetch", "CodeMode", "LSP"]);
+  const restrictedDenied = new Set([
+    "Bash",
+    "PowerShell",
+    "Agent",
+    "WebFetch",
+    "CodeMode",
+    "LSP",
+    "Browser",
+  ]);
   const allowedByFlag = options.allowedTools ?? [];
   const tools = [
     ...withExtensions,
@@ -358,6 +419,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
         !restrictedDenied.has(tool.name) ||
         allowedByFlag.includes(tool.name),
     );
+  toolRegistry.push(...tools);
   const specs = toolSpecs(tools);
 
   const roots = toolRoots;
@@ -582,6 +644,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     mcpClients,
     ...(sandbox === undefined ? {} : { sandbox }),
     ...(lspTool === undefined ? {} : { lsp: lspTool }),
+    ...(artifactsTool === undefined ? {} : { artifacts: artifactsTool }),
   };
 }
 

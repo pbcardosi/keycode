@@ -53,6 +53,20 @@ export const LspServerSchema = z
   })
   .passthrough();
 
+export const BrowserSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    driver: z.string().optional(),
+    allowedDomains: z.array(z.string()).optional(),
+  })
+  .passthrough();
+
+export const ArtifactsSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+  })
+  .passthrough();
+
 export const SettingsSchema = z
   .object({
     $schema: z.string().optional(),
@@ -67,6 +81,9 @@ export const SettingsSchema = z
     mcpServers: z.record(z.string(), z.unknown()).optional(),
     sandbox: SandboxSchema.optional(),
     lsp: z.record(z.string(), LspServerSchema).optional(),
+    browser: BrowserSchema.optional(),
+    artifacts: ArtifactsSchema.optional(),
+    codeMode: z.boolean().optional(),
     statusLine: z
       .union([z.string(), z.object({ type: z.string(), command: z.string() })])
       .nullable()

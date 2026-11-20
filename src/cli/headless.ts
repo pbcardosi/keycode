@@ -163,6 +163,7 @@ export async function runHeadless(options: HeadlessOptions): Promise<HeadlessRes
       writeLine({ type: "error", error: { code: keycode.code, message: keycode.userMessage } });
     }
     setup.lsp?.stop();
+    setup.artifacts?.stop();
     await Promise.all(setup.mcpClients.map((client) => client.close()));
     return { setup, text: accumulated, usage, turns, exitCode: keycode.exitCode };
   }
@@ -196,6 +197,7 @@ export async function runHeadless(options: HeadlessOptions): Promise<HeadlessRes
   }
 
   setup.lsp?.stop();
+  setup.artifacts?.stop();
   await Promise.all(setup.mcpClients.map((client) => client.close()));
   return { setup, text: accumulated, usage, turns, exitCode: 0 };
 }
@@ -208,6 +210,7 @@ export async function runInteractive(
   for (const warning of current.warnings) process.stderr.write(`warning: ${warning}\n`);
   const closeSetup = async (setup: AgentSetup): Promise<void> => {
     setup.lsp?.stop();
+    setup.artifacts?.stop();
     await Promise.all(setup.mcpClients.map((client) => client.close()));
   };
   const tui = runTui({
