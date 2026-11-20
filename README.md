@@ -178,6 +178,29 @@ generated. Pass `--token <value>` to reuse one on a trusted loopback setup.
 
 ---
 
+## VS Code
+
+`editors/vscode` contains an extension that starts `keycode remote` and opens the
+same web UI in a VS Code editor tab.
+
+```powershell
+cd editors/vscode
+npx @vscode/vsce package
+code --install-extension keycode-vscode-0.1.0.vsix
+```
+
+Then run **keycode: Open Chat** from the Command Palette. The extension has
+settings for executable, provider, model, permission mode, working directory,
+and whether to open in an editor tab or the external browser. The server is
+stopped when the extension deactivates.
+
+The extension is plain CommonJS, so there is no build step. It requires the
+`keycode` CLI on `PATH` or an absolute `keycode.executable`. `npm run
+extension:smoke` loads the extension with a mocked VS Code API and verifies the
+real server launch in a temp workspace.
+
+---
+
 ## Permissions
 
 Every tool call goes through one permission pipeline, including MCP tools.

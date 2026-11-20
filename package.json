@@ -32,9 +32,11 @@
     "test:acceptance": "npm run build && vitest run tests/acceptance",
     "validate:spec": "node scripts/validate-spec.mjs",
     "validate:package": "node scripts/validate-package.mjs",
+    "validate:extension": "node scripts/validate-extension.mjs",
     "pack:smoke": "npm run build && node scripts/pack-smoke.mjs",
+    "extension:smoke": "node scripts/extension-smoke.mjs",
     "prepack": "npm run build",
-    "verify": "npm run validate:spec && npm run validate:package && npm run typecheck && npm test"
+    "verify": "npm run validate:spec && npm run validate:package && npm run validate:extension && npm run typecheck && npm test"
   },
   "dependencies": {
     "commander": "^14.0.0",

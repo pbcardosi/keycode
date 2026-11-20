@@ -39,6 +39,8 @@ First alpha.
   and a session list with new-session and resume-with-history.
 - Web UI session rename, fork, and delete, plus provider/model switching that
   keeps the current session and persists in the session file.
+- VS Code extension that starts `keycode remote` and opens the shared web UI in
+  a Simple Browser tab, with model, permission, and lifecycle settings.
 
 ### Known limitations
 

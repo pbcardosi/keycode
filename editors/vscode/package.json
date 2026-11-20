@@ -1,0 +1,86 @@
+{
+  "name": "keycode-vscode",
+  "displayName": "keycode",
+  "description": "Local-first coding agent for VS Code, powered by the keycode CLI.",
+  "version": "0.1.0",
+  "publisher": "keycode",
+  "license": "Apache-2.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other", "Machine Learning"],
+  "keywords": ["agent", "coding", "ollama", "byok"],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onCommand:keycode.openChat",
+    "onCommand:keycode.restartServer",
+    "onCommand:keycode.stopServer",
+    "onCommand:keycode.openInBrowser",
+    "onCommand:keycode.showLog"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "keycode.openChat",
+        "title": "keycode: Open Chat"
+      },
+      {
+        "command": "keycode.restartServer",
+        "title": "keycode: Restart Server"
+      },
+      {
+        "command": "keycode.stopServer",
+        "title": "keycode: Stop Server"
+      },
+      {
+        "command": "keycode.openInBrowser",
+        "title": "keycode: Open in Browser"
+      },
+      {
+        "command": "keycode.showLog",
+        "title": "keycode: Show Log"
+      }
+    ],
+    "configuration": {
+      "title": "keycode",
+      "properties": {
+        "keycode.executable": {
+          "type": "string",
+          "default": "keycode",
+          "description": "Path to the keycode executable. Use keycode.cmd on Windows if needed."
+        },
+        "keycode.provider": {
+          "type": "string",
+          "default": "",
+          "description": "Provider id, for example ollama, gemini, or groq. Empty lets keycode choose."
+        },
+        "keycode.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model id. Empty uses the provider default."
+        },
+        "keycode.permissionMode": {
+          "type": "string",
+          "enum": ["manual", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions"],
+          "default": "manual",
+          "description": "Permission mode for the web UI. Approvals appear in the panel."
+        },
+        "keycode.cwd": {
+          "type": "string",
+          "default": "",
+          "description": "Working directory. Empty uses the first workspace folder."
+        },
+        "keycode.openIn": {
+          "type": "string",
+          "enum": ["editor", "external"],
+          "default": "editor",
+          "description": "Open the keycode web UI in a VS Code editor tab or the default browser."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "package": "npx @vscode/vsce package"
+  }
+}
