@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Box, Text, render, useApp, useInput } from "ink";
+import { Box, Text, render, useApp, useStdin } from "ink";
 import { randomUUID } from "node:crypto";
 import type { AgentEvent } from "../app/agent.js";
 import type { Message } from "../contracts/message.js";
@@ -39,7 +39,7 @@ interface TuiAppProps {
   onClear?: (() => void) | undefined;
 }
 
-function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
+export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
   const { agent } = setup;
   const initial = setup.store.load(setup.sessionId);
   const [messages, setMessages] = useState<Message[]>(initial.messages);
@@ -49,7 +49,38 @@ function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
   const [spinner, setSpinner] = useState(0);
   const [busy, setBusy] = useState(false);
   const app = useApp();
+  const { stdin } = useStdin();
   const controllerRef = useRef(new AbortController());
+  const inputRef = useRef("");
+  const submitRef = useRef<(line: string) => void>(() => undefined);
+  inputRef.current = input;
+
+  useEffect(() => {
+    const handleData = (data: string): void => {
+      const text = data.toString();
+      for (const char of text) {
+        if (char === "\n" || char === "\r") {
+          const pending = inputRef.current.trim();
+          if (pending.length > 0) void submitRef.current(pending);
+          continue;
+        }
+        if (char === "\x7f" || char === "\b") {
+          setInput((previous) => previous.slice(0, -1));
+          continue;
+        }
+        if (char.length === 1 && char >= " ") {
+          setInput((previous) => previous + char);
+        }
+      }
+    };
+    stdin.on("data", handleData);
+    stdin.on("end", () => {
+      app.exit();
+    });
+    return () => {
+      stdin.off("data", handleData);
+    };
+  }, [stdin, app]);
 
   useEffect(() => {
     const unsubscribe = agent.subscribe((event: AgentEvent) => {
@@ -128,27 +159,7 @@ function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
     }
   };
 
-  useInput((inputKey, key) => {
-    if (key.return) {
-      if (input.trim().length > 0) void submit(input);
-      return;
-    }
-    if (key.escape) {
-      app.exit();
-      return;
-    }
-    if (key.ctrl && inputKey === "c") {
-      app.exit();
-      return;
-    }
-    if (key.backspace) {
-      setInput((previous) => previous.slice(0, -1));
-      return;
-    }
-    if (inputKey.length === 1 && !key.ctrl && !key.meta) {
-      setInput((previous) => previous + inputKey);
-    }
-  });
+  submitRef.current = submit;
 
   const footer = renderFooter({
     model: agent.model,

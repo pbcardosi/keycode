@@ -13,17 +13,17 @@ describe("T-S4: workspace trust", () => {
     });
 
     expect(isTrusted(home, ws)).toBe(false);
-    const untrusted = loadSettings({ cwd: ws, home, projectLayers: false });
+    const untrusted = loadSettings({ cwd: ws, home, projectLayers: isTrusted(home, ws) });
     expect(permissionSettings(untrusted.settings).defaultMode).toBe("manual");
 
     trustWorkspace(home, ws);
     expect(isTrusted(home, ws)).toBe(true);
-    const trusted = loadSettings({ cwd: ws, home });
+    const trusted = loadSettings({ cwd: ws, home, projectLayers: isTrusted(home, ws) });
     expect(permissionSettings(trusted.settings).defaultMode).toBe("plan");
 
     untrustWorkspace(home, ws);
     expect(isTrusted(home, ws)).toBe(false);
-    const back = loadSettings({ cwd: ws, home });
+    const back = loadSettings({ cwd: ws, home, projectLayers: isTrusted(home, ws) });
     expect(permissionSettings(back.settings).defaultMode).toBe("manual");
   });
 });

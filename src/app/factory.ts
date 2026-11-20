@@ -58,6 +58,7 @@ export interface AgentSetupOptions {
   fetchImpl?: typeof fetch | undefined;
   tools?: ReturnType<typeof createCoreTools> | undefined;
   trust?: boolean | undefined;
+  autoCompactThreshold?: number | undefined;
 }
 
 export interface AgentSetup {
@@ -266,6 +267,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   });
 
   const checkpoints = new CheckpointStore(home, cwd, store);
+  const autoCompactThreshold = options.autoCompactThreshold ?? settings.autoCompactThreshold;
   const maxBudget = options.maxBudgetUsd ?? settings.maxBudgetUsd;
   const budget = maxBudget === undefined ? undefined : new BudgetGuard(maxBudget, options.pricing);
 
@@ -291,9 +293,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     ...(budget === undefined ? {} : { budget }),
     ...(options.pricing === undefined ? {} : { pricing: options.pricing }),
     ...(resolved.capabilities === undefined ? {} : { capabilities: resolved.capabilities }),
-    ...(settings.autoCompactThreshold === undefined
-      ? {}
-      : { autoCompactThreshold: settings.autoCompactThreshold }),
+    ...(autoCompactThreshold === undefined ? {} : { autoCompactThreshold }),
     ...(options.effort === undefined ? {} : { effort: options.effort }),
     ...(fallback === undefined ? {} : { fallback }),
     checkpointStore: checkpoints,
