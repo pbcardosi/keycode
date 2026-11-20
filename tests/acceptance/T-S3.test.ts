@@ -93,7 +93,10 @@ describe("T-S3: permission prompt", () => {
       },
       { behavior: "ask", reason: "Manual mode requires approval", source: "mode" },
     );
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 150));
+    const deadline = Date.now() + 5_000;
+    while (!output.includes("Permission required") && Date.now() < deadline) {
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));
+    }
     expect(output).toContain("Permission required");
     expect(output).toContain("Bash");
     expect(output).toContain("$ echo hi");
