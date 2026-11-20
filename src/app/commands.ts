@@ -8,6 +8,8 @@ import { getPreset } from "../providers/presets.js";
 import { copyToClipboard } from "../util/clipboard.js";
 import { normalizeSlashes } from "../util/paths.js";
 import { findCommand, renderCommand } from "../extensions/commands.js";
+import { loadPrivacy, savePrivacy, telemetryEnabled } from "../privacy/index.js";
+import { releaseNotes } from "./onboarding.js";
 
 export interface CommandResult {
   handled: boolean;
@@ -47,6 +49,8 @@ export const COMMAND_HELP: Array<[string, string]> = [
   ["/output-style [name]", "List or select an output style"],
   ["/memory", "Show loaded memory files"],
   ["/status", "Show provider, model, and session"],
+  ["/privacy-settings [on|off]", "Show or change privacy and telemetry"],
+  ["/release-notes", "Show release notes"],
   ["/exit", "Exit keycode"],
 ];
 
@@ -276,6 +280,21 @@ export async function executeCommand(line: string, ctx: CommandContext): Promise
       out(
         `session: ${setup.sessionId}\nprovider: ${setup.providerId}\nmodel: ${setup.model}\neffort: ${agent.effort ?? "default"}\nmode: ${setup.permissionMode}\ncwd: ${setup.store.cwd}`,
       );
+      return { handled: true };
+    case "privacy-settings": {
+      if (args === "on") {
+        savePrivacy(setup.home, { consent: "granted", telemetry: true });
+      } else if (args === "off") {
+        savePrivacy(setup.home, { consent: "denied", telemetry: false });
+      }
+      const state = loadPrivacy(setup.home);
+      out(
+        `consent: ${state.consent}\ntelemetry: ${state.telemetry ? "on" : "off"}\neffective: ${telemetryEnabled(setup.home) ? "on" : "off"}`,
+      );
+      return { handled: true };
+    }
+    case "release-notes":
+      out(releaseNotes());
       return { handled: true };
     case "exit":
     case "quit":

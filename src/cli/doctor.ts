@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, statfsSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statfsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { loadSettings, permissionSettings } from "../storage/settings.js";
+import { loadSettings, permissionSettings, settingsCandidatePaths } from "../storage/settings.js";
+import { SettingsSchema } from "../storage/schema.js";
 import { managedSettingsPath, keycodeHome } from "../util/paths.js";
 import { createProvider, availableProviderIds } from "../providers/registry.js";
 import { KeycodeError } from "../util/errors.js";
@@ -61,6 +62,29 @@ function checkRipgrep(): DoctorCheck {
     : { name: "ripgrep", status: "warn", detail: "rg is not installed; the built-in search is used" };
 }
 
+function repairSettingsFiles(cwd: string, home: string, env: NodeJS.ProcessEnv): string[] {
+  const repaired: string[] = [];
+  for (const path of settingsCandidatePaths({ cwd, home, env })) {
+    if (!existsSync(path)) continue;
+    let valid = false;
+    try {
+      const raw = JSON.parse(readFileSync(path, "utf8")) as unknown;
+      valid = SettingsSchema.safeParse(raw).success;
+    } catch {
+      valid = false;
+    }
+    if (valid) continue;
+    try {
+      copyFileSync(path, `${path}.bak`);
+      writeFileSync(path, "{}\n");
+      repaired.push(path);
+    } catch {
+      // Leave unreadable files in place.
+    }
+  }
+  return repaired;
+}
+
 function checkDisk(home: string): DoctorCheck {
   try {
     const stats = statfsSync(home);
@@ -84,9 +108,23 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   checks.push(checkRipgrep());
   checks.push(checkDisk(existsSync(home) ? home : options.cwd));
 
+  if (options.fix === true) {
+    const repaired = repairSettingsFiles(options.cwd, home, env);
+    if (repaired.length > 0) {
+      checks.push({ name: "repair", status: "ok", detail: `repaired ${repaired.join(", ")}` });
+    }
+  }
+
   const loaded = loadSettings({ cwd: options.cwd, home, env });
+  const invalidSettings = loaded.warnings.some(
+    (warning) => warning.includes("Ignoring invalid") || warning.includes("unreadable"),
+  );
   if (loaded.warnings.length > 0) {
-    checks.push({ name: "settings", status: "warn", detail: loaded.warnings.join("; ") });
+    checks.push({
+      name: "settings",
+      status: invalidSettings ? "fail" : "warn",
+      detail: loaded.warnings.join("; "),
+    });
   } else {
     checks.push({
       name: "settings",
@@ -94,6 +132,18 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
       detail: `${loaded.sources.length} file(s); mode ${permissionSettings(loaded.settings).defaultMode}`,
     });
   }
+
+  checks.push({
+    name: "permissions",
+    status: "ok",
+    detail: `mode ${permissionSettings(loaded.settings).defaultMode}`,
+  });
+  const mcpServers = Object.keys(loaded.settings.mcpServers ?? {});
+  checks.push({
+    name: "mcp",
+    status: mcpServers.length > 0 ? "ok" : "warn",
+    detail: mcpServers.length > 0 ? `${mcpServers.length} server(s)` : "no MCP servers configured",
+  });
 
   const managed = managedSettingsPath(env);
   checks.push({
