@@ -85,7 +85,8 @@ export function renderFooter(fields: {
   tokensOut: number;
   costUsd: number;
   branch: string | null;
-  tasks: number;
+  tasks?: number | undefined;
+  checkpoints?: number | undefined;
   progress?: string | undefined;
 }): string {
   const parts = [
@@ -94,7 +95,8 @@ export function renderFooter(fields: {
     `cost: $${fields.costUsd.toFixed(4)}`,
   ];
   if (fields.branch) parts.push(`branch: ${fields.branch}`);
-  if (fields.tasks > 0) parts.push(`tasks: ${fields.tasks}`);
+  if ((fields.tasks ?? 0) > 0) parts.push(`tasks: ${fields.tasks}`);
+  if ((fields.checkpoints ?? 0) > 0) parts.push(`checkpoints: ${fields.checkpoints}`);
   if (fields.progress) parts.push(fields.progress);
   return parts.join("  ");
 }

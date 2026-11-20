@@ -67,6 +67,7 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
   useEffect(() => {
     const handleData = (data: string): void => {
       const text = data.toString();
+      let line = inputRef.current;
       let index = 0;
       while (index < text.length) {
         const char = text[index] ?? "";
@@ -98,19 +99,26 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
           continue;
         }
         if (char === "\n" || char === "\r") {
-          const pending = inputRef.current.trim();
+          // A Windows Enter key can arrive as CRLF. Treat it as one submit.
+          if (char === "\r" && text[index + 1] === "\n") index += 1;
+          const pending = line.trim();
+          line = "";
+          inputRef.current = "";
+          setInput("");
           if (pending.length > 0) void submitRef.current(pending);
           index += 1;
           continue;
         }
         if (char === "\x7f" || char === "\b") {
-          setInput((previous) => previous.slice(0, -1));
+          line = line.slice(0, -1);
           index += 1;
           continue;
         }
-        if (char >= " ") setInput((previous) => previous + char);
+        if (char >= " ") line += char;
         index += 1;
       }
+      inputRef.current = line;
+      setInput(line);
     };
     stdin.on("data", handleData);
     const onEnd = (): void => {
@@ -163,31 +171,32 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
 
   const submit = async (line: string): Promise<void> => {
     const text = line.trim();
-    if (text.length === 0) return;
-    if (text.startsWith("/")) {
-      const result = await executeCommand(text, {
-        setup,
-        agent,
-        out: () => undefined,
-        signal: controllerRef.current.signal,
-      });
-      if (result.exit) app.exit();
-      if (result.clear) onClear?.();
-      setInput("");
-      setStreamText("");
-      syncFromStore();
-      return;
-    }
-    if (controllerRef.current.signal.aborted) controllerRef.current = new AbortController();
+    if (text.length === 0 || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
+    setInput("");
+    inputRef.current = "";
     setStreamText("");
     setTools([]);
-    saveDraft(setup.home, setup.sessionId, text);
     try {
+      if (text.startsWith("/")) {
+        const result = await executeCommand(text, {
+          setup,
+          agent,
+          out: () => undefined,
+          signal: controllerRef.current.signal,
+        });
+        if (result.exit) app.exit();
+        if (result.clear) onClear?.();
+        return;
+      }
+      if (controllerRef.current.signal.aborted) controllerRef.current = new AbortController();
+      saveDraft(setup.home, setup.sessionId, text);
       await agent.runTurn(text, controllerRef.current.signal);
     } catch (error) {
       setStreamText(`Error: ${(error as Error).message}`);
     } finally {
+      busyRef.current = false;
       setBusy(false);
       setInput("");
       syncFromStore();
@@ -202,7 +211,7 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
     tokensOut: agent.usage.outputTokens,
     costUsd: agent.costUsd,
     branch: null,
-    tasks: setup.store.load(setup.sessionId).checkpoints.length,
+    checkpoints: setup.store.load(setup.sessionId).checkpoints.length,
     progress: busy ? `${spinnerFrame(spinner)} generating` : undefined,
   });
 

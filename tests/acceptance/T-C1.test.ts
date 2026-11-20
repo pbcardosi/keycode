@@ -27,15 +27,21 @@ describe("T-C1: Interactive REPL", () => {
       patchConsole: false,
       exitOnCtrlC: false,
     });
-    stdin.write("hello");
-    await sleep(200);
-    stdin.write("\n");
-    await sleep(600);
+    // One Windows-style Enter (CRLF) must submit exactly one turn.
+    stdin.write("hello\r\n");
+    await sleep(800);
     app.unmount();
 
     const view = setup.store.load(setup.sessionId);
-    expect(view.messages.some((message) => message.role === "user" && messageText(message) === "hello")).toBe(true);
-    expect(view.messages.some((message) => message.role === "assistant" && messageText(message).length > 0)).toBe(true);
+    const userMessages = view.messages.filter(
+      (message) => message.role === "user" && messageText(message) === "hello",
+    );
+    expect(userMessages).toHaveLength(1);
+    const assistantMessages = view.messages.filter((message) => message.role === "assistant");
+    expect(assistantMessages).toHaveLength(1);
+    expect(messageText(assistantMessages[0] as NonNullable<(typeof assistantMessages)[number]>)).toContain(
+      "fake response",
+    );
     expect(output).toContain("fake response");
   });
 });
