@@ -19,6 +19,7 @@ export interface DiscoverAgentsOptions {
   cwd: string;
   home: string;
   trusted?: boolean | undefined;
+  extraDirs?: string[] | undefined;
 }
 
 function walk(dir: string, out: string[]): void {
@@ -48,6 +49,7 @@ export function discoverAgents(options: DiscoverAgentsOptions): AgentDefinition[
     roots.push({ dir: join(options.cwd, ".keycode", "agents"), source: "project" });
     roots.push({ dir: join(options.cwd, ".claude", "agents"), source: "project" });
   }
+  for (const dir of options.extraDirs ?? []) roots.push({ dir, source: "user" });
   roots.push({ dir: join(options.home, ".keycode", "agents"), source: "user" });
 
   const byName = new Map<string, AgentDefinition>();

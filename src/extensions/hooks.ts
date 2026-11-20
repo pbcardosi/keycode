@@ -69,6 +69,14 @@ export function parseHookConfig(raw: unknown): HookConfig {
   return parsed.success ? parsed.data : {};
 }
 
+export function mergeHookConfigs(first: HookConfig, second: HookConfig): HookConfig {
+  const merged: HookConfig = { ...first };
+  for (const [event, matchers] of Object.entries(second)) {
+    merged[event] = [...(merged[event] ?? []), ...matchers];
+  }
+  return merged;
+}
+
 export function matchesMatcher(matcher: string | undefined, toolName: string): boolean {
   if (matcher === undefined || matcher === "" || matcher === "*") return true;
   if (matcher.startsWith("/") && matcher.endsWith("/") && matcher.length > 2) {

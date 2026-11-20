@@ -20,6 +20,7 @@ export interface DiscoverSkillsOptions {
   cwd: string;
   home: string;
   trusted?: boolean | undefined;
+  extraDirs?: string[] | undefined;
 }
 
 function walkSkillFiles(dir: string, out: string[]): void {
@@ -75,6 +76,7 @@ export function discoverSkills(options: DiscoverSkillsOptions): SkillMetadata[] 
     roots.push({ dir: join(options.cwd, ".keycode", "skills"), source: "project" });
     roots.push({ dir: join(options.cwd, ".claude", "skills"), source: "project" });
   }
+  for (const dir of options.extraDirs ?? []) roots.push({ dir, source: "user" });
   roots.push({ dir: join(options.home, ".keycode", "skills"), source: "user" });
 
   const byName = new Map<string, SkillMetadata>();

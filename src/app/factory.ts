@@ -19,7 +19,15 @@ import {
 import { loadMemory } from "../storage/memory.js";
 import { parseRule } from "../permissions/rules.js";
 import type { RuleScope } from "../contracts/permissions.js";
-import { CommandHookDispatcher, parseHookConfig, type HookConfig } from "../extensions/hooks.js";
+import {
+  CommandHookDispatcher,
+  mergeHookConfigs,
+  parseHookConfig,
+  type HookConfig,
+} from "../extensions/hooks.js";
+import { collectPluginHooks, enabledPluginDirs } from "../extensions/plugins.js";
+import { AutoMemoryStore } from "../storage/autoMemory.js";
+import { projectDir } from "../util/paths.js";
 import { discoverCommands, type CommandDefinition } from "../extensions/commands.js";
 import { discoverSkills, type SkillMetadata } from "../extensions/skills.js";
 import { discoverAgents, type AgentDefinition } from "../extensions/customAgents.js";
@@ -93,6 +101,7 @@ export interface AgentSetup {
   agents: AgentDefinition[];
   styles: OutputStyle[];
   outputStyle: string;
+  autoMemory: AutoMemoryStore;
 }
 
 function displayProviderAuthError(): KeycodeError {
@@ -240,8 +249,13 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
 
   const view = store.load(sessionId);
   const allowCustomizations = options.safeMode !== true;
-  const skills = allowCustomizations ? discoverSkills({ cwd, home, trusted }) : [];
-  const agentDefinitions = allowCustomizations ? discoverAgents({ cwd, home, trusted }) : [];
+  const pluginDirs = enabledPluginDirs(home);
+  const skills = allowCustomizations
+    ? discoverSkills({ cwd, home, trusted, extraDirs: pluginDirs.map((dir) => join(dir, "skills")) })
+    : [];
+  const agentDefinitions = allowCustomizations
+    ? discoverAgents({ cwd, home, trusted, extraDirs: pluginDirs.map((dir) => join(dir, "agents")) })
+    : [];
   const styles = discoverStyles({ cwd, home, trusted });
   const styleName = options.outputStyle ?? settings.outputStyle ?? "default";
   const activeStyle = findStyle(styles, styleName);
@@ -272,19 +286,34 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   const specs = toolSpecs(tools);
 
   const roots = [cwd, ...(options.addDirs ?? []).map((dir) => resolve(cwd, dir))];
-  const commands = allowCustomizations ? discoverCommands({ cwd, home, trusted }) : [];
+  const commands = allowCustomizations
+    ? discoverCommands({
+        cwd,
+        home,
+        trusted,
+        extraDirs: pluginDirs.map((dir) => join(dir, "commands")),
+      })
+    : [];
   const memory = loadMemory({
     cwd,
     home,
     ...(options.noMemory === true || options.bare === true ? { noMemory: true } : {}),
   });
   warnings.push(...memory.warnings);
+  const autoMemory = new AutoMemoryStore(join(projectDir(home, cwd), "memory.json"));
+  const recalled = autoMemory.recall();
+  const memoryText = [
+    memory.text,
+    recalled.length > 0 ? `# Auto-memory\n\n${recalled.map((entry) => `- ${entry.text}`).join("\n")}` : "",
+  ]
+    .filter((section) => section.trim().length > 0)
+    .join("\n\n");
 
   const promptOptions: SystemPromptOptions = {
     cwd,
     model,
     provider: providerId,
-    memoryText: memory.text,
+    memoryText,
     tools: specs,
     ...(options.systemPrompt === undefined ? {} : { basePrompt: options.systemPrompt }),
     ...(options.appendSystemPrompt === undefined ? {} : { appendPrompt: options.appendSystemPrompt }),
@@ -321,7 +350,10 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   const hookConfig =
     options.bare === true || options.safeMode === true
       ? {}
-      : (options.hooks ?? (trusted ? parseHookConfig(settings.hooks) : {}));
+      : mergeHookConfigs(
+          options.hooks ?? (trusted ? parseHookConfig(settings.hooks) : {}),
+          collectPluginHooks(home),
+        );
   const hooks =
     Object.keys(hookConfig).length > 0
       ? new CommandHookDispatcher(hookConfig, { cwd, home, env })
@@ -450,6 +482,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     agents: agentDefinitions,
     styles,
     outputStyle: activeStyle?.name ?? "default",
+    autoMemory,
   };
 }
 

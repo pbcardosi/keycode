@@ -18,6 +18,7 @@ export interface DiscoverCommandsOptions {
   cwd: string;
   home: string;
   trusted?: boolean | undefined;
+  extraDirs?: string[] | undefined;
 }
 
 function walk(dir: string, base: string, source: "project" | "user", out: string[]): void {
@@ -50,6 +51,7 @@ export function discoverCommands(options: DiscoverCommandsOptions): CommandDefin
     roots.push({ dir: join(options.cwd, ".keycode", "commands"), source: "project" });
     roots.push({ dir: join(options.cwd, ".claude", "commands"), source: "project" });
   }
+  for (const dir of options.extraDirs ?? []) roots.push({ dir, source: "user" });
   roots.push({ dir: join(options.home, ".keycode", "commands"), source: "user" });
 
   const byName = new Map<string, CommandDefinition>();
