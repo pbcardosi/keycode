@@ -6,7 +6,8 @@ A free, local-first, bring-your-own-key coding agent for the terminal.
 Code v2.1.322. It is not affiliated with Anthropic and does not require an
 Anthropic account.
 
-**Status:** specification. The runtime is not implemented yet.
+**Status:** working alpha. All 90 features have passing acceptance tests; run
+from `dist/` (no published package yet).
 
 ---
 
@@ -28,24 +29,77 @@ See `FEATURES.md` for the full free-key matrix.
 ## Planned quickstart
 
 ```bash
+git clone <repo> && cd keycode
+npm install
+npm run build
+
 # Option A: a free hosted key (macOS/Linux)
 export GEMINI_API_KEY="your-key"
-keycode --provider gemini --model gemini-2.5-flash
+node dist/cli/index.js --provider gemini --model gemini-2.5-flash
 
 # Option A on Windows PowerShell
 $env:GEMINI_API_KEY="your-key"
-keycode --provider gemini --model gemini-2.5-flash
+node dist/cli/index.js --provider gemini --model gemini-2.5-flash
 
 # Option B: a local model, no key
 ollama serve
 ollama pull gemma4:e2b
-keycode --provider ollama --model gemma4:e2b
+node dist/cli/index.js --provider ollama --model gemma4:e2b
 ```
 
 Then, inside the TUI:
 
 ```
 > explain this repository and run the tests
+```
+
+---
+
+## Permissions
+
+Every tool call goes through one permission pipeline, including MCP tools.
+
+- **Modes:** `manual` (default), `acceptEdits`, `plan`, `auto`, `dontAsk`,
+  `bypassPermissions`.
+- **TUI:** when a tool needs approval, a dialog shows the request with a
+  command preview or an edit diff. Choose allow once / allow always / allow for
+  session / deny / cancel.
+- **Headless:** there is no prompt, so an unapproved call is denied and the
+  result names the exact rule to add, for example:
+  `Add --allow "Bash(npm test)" or run interactively.`
+- **Rules:** repeatable and evaluated deny → ask → allow:
+
+```bash
+node dist/cli/index.js --provider ollama \
+  --deny "Read(./.env)" \
+  --allow "Bash(npm test:*)" \
+  --allow "Edit(src/**)" \
+  -p "run the tests and fix failures"
+```
+
+A command rule without `:*` matches exactly, so `Bash(npm test)` does not
+allow `npm test; curl ...`. Use `Bash(npm test:*)` to allow that command with
+any arguments, or a glob such as `Bash(git *)` to opt into a family of
+commands. Allow rules never extend to compound shell commands unless the rule
+itself contains the operator.
+
+`allow always` in the TUI persists a specific rule (command or path), not a
+whole-tool grant.
+
+---
+
+## MCP servers
+
+Enabled entries in `settings.json` under `mcpServers` (stdio or HTTP/SSE) are
+connected on startup and exposed as `mcp__<server>__<tool>` tools. A failing
+server produces a warning and does not abort the session.
+
+```json
+{
+  "mcpServers": {
+    "docs": { "type": "stdio", "command": "node", "args": ["server.mjs"] }
+  }
+}
 ```
 
 ---

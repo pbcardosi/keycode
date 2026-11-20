@@ -69,12 +69,52 @@ function pathMatches(pattern: string, candidate: string, cwd: string): boolean {
   return globToRegex(patternLower, true).test(target);
 }
 
-function commandMatches(pattern: string, command: string): boolean {
+function commandMatches(
+  pattern: string,
+  command: string,
+  behavior: "allow" | "deny" | "ask",
+): boolean {
   const trimmed = command.trim();
-  if (!pattern.includes("*") && !pattern.includes("?")) {
-    return trimmed === pattern.trim() || trimmed.startsWith(`${pattern.trim()} `);
+  const raw = pattern.trim();
+
+  // An allow rule must not silently extend to a compound shell command:
+  // "git status" must not allow "git status; rm -rf .".
+  if (behavior === "allow" && hasUnquotedChain(trimmed) && !hasUnquotedChain(raw)) {
+    return false;
   }
-  return globToRegex(pattern.trim(), false).test(trimmed);
+
+  if (raw.endsWith(":*")) {
+    const prefix = raw.slice(0, -2).trim();
+    return trimmed === prefix || trimmed.startsWith(`${prefix} `);
+  }
+  if (!raw.includes("*") && !raw.includes("?")) {
+    return trimmed === raw;
+  }
+  return globToRegex(raw, false).test(trimmed);
+}
+
+function hasUnquotedChain(command: string): boolean {
+  let quote: "'" | '"' | null = null;
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index];
+    if (quote !== null) {
+      if (char === quote) quote = null;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+    if (char === "`" || char === ";" || char === "|" || char === "&" || char === "\n") {
+      return true;
+    }
+    if (char === "$" && command[index + 1] === "(") return true;
+  }
+  return false;
 }
 
 function inputPath(input: unknown, cwd: string): string {
@@ -114,7 +154,7 @@ export function matchRule(rule: PermissionRule, request: PermissionRequest): boo
   if (rule.pattern === undefined || rule.pattern === "" || rule.pattern === "*") return true;
 
   if (rule.tool === "Bash" || rule.tool === "PowerShell") {
-    return commandMatches(rule.pattern, inputCommand(request.input));
+    return commandMatches(rule.pattern, inputCommand(request.input), rule.behavior);
   }
   if (rule.tool === "WebFetch" || rule.tool === "WebSearch") {
     const input = request.input;

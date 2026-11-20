@@ -36,4 +36,59 @@ describe("T-S2: rule engine", () => {
     expect(askRule.behavior).toBe("ask");
     expect(askRule.rule).toBe("Bash(rm *)");
   });
+
+  it("does not let a simple allow rule cover a compound command", () => {
+    const ws = makeWorkspace();
+    const service = new PermissionService({
+      mode: "manual",
+      cwd: ws,
+      roots: [ws],
+      rules: [
+        parseRule("Bash(echo hi)", "user", "allow"),
+        parseRule("Bash(npm test:*)", "user", "allow"),
+        parseRule('Bash(printf "a; b")', "user", "allow"),
+      ],
+    });
+
+    const exact = service.evaluate({
+      tool: "Bash",
+      input: { command: "echo hi" },
+      cwd: ws,
+      readOnly: false,
+    });
+    expect(exact.behavior).toBe("allow");
+
+    const chained = service.evaluate({
+      tool: "Bash",
+      input: { command: "echo hi && rm -rf ." },
+      cwd: ws,
+      readOnly: false,
+    });
+    expect(chained.behavior).toBe("ask");
+    expect(chained.rule).toBeUndefined();
+
+    const extraArgs = service.evaluate({
+      tool: "Bash",
+      input: { command: "echo hi there" },
+      cwd: ws,
+      readOnly: false,
+    });
+    expect(extraArgs.behavior).toBe("ask");
+
+    const prefixed = service.evaluate({
+      tool: "Bash",
+      input: { command: "npm test -- --watch" },
+      cwd: ws,
+      readOnly: false,
+    });
+    expect(prefixed.behavior).toBe("allow");
+
+    const quoted = service.evaluate({
+      tool: "Bash",
+      input: { command: 'printf "a; b"' },
+      cwd: ws,
+      readOnly: false,
+    });
+    expect(quoted.behavior).toBe("allow");
+  });
 });
