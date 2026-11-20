@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { createWebFetchTool } from "../../dist/tools/webfetch.js";
+import { createWebFetchTool, type LookupFn } from "../../dist/tools/webfetch.js";
 import { makeToolCtx, makeWorkspace, textOf } from "../helpers.js";
 
 let server: Server;
@@ -64,5 +64,50 @@ describe("T-T8: WebFetch", () => {
     const metadata = await tool.execute({ url: "http://169.254.169.254/latest/meta-data/" }, ctx);
     expect(metadata.ok).toBe(false);
     expect((metadata.metadata as { code?: string } | undefined)?.code).toBe("SANDBOX_DENIED");
+  });
+
+  it("resolves hostnames before fetching and re-checks redirects", async () => {
+    const ws = makeWorkspace();
+    const ctx = makeToolCtx({ cwd: ws });
+    const lookup: LookupFn = async (hostname) => {
+      if (hostname === "safe.test") return [{ address: "93.184.216.34", family: 4 }];
+      if (hostname === "mixed.test") {
+        return [
+          { address: "93.184.216.34", family: 4 },
+          { address: "127.0.0.1", family: 4 },
+        ];
+      }
+      return [{ address: "10.0.0.1", family: 4 }];
+    };
+    let fetched = 0;
+    const fetchImpl = (async (input: string | URL | Request) => {
+      fetched += 1;
+      const url = new URL(input instanceof Request ? input.url : input.toString());
+      if (url.hostname === "safe.test") {
+        return new Response(null, {
+          status: 302,
+          headers: { location: "https://internal.test/secret" },
+        });
+      }
+      return new Response("<html><body>unexpected</body></html>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+    }) as typeof fetch;
+
+    const tool = createWebFetchTool({ lookupImpl: lookup, fetchImpl });
+    const privateHost = await tool.execute({ url: "https://evil.test/" }, ctx);
+    expect(privateHost.ok).toBe(false);
+    expect((privateHost.metadata as { code?: string } | undefined)?.code).toBe("SANDBOX_DENIED");
+    expect(fetched).toBe(0);
+
+    const mixed = await tool.execute({ url: "https://mixed.test/" }, ctx);
+    expect(mixed.ok).toBe(false);
+    expect((mixed.metadata as { code?: string } | undefined)?.code).toBe("SANDBOX_DENIED");
+
+    const redirect = await tool.execute({ url: "https://safe.test/go" }, ctx);
+    expect(redirect.ok).toBe(false);
+    expect((redirect.metadata as { code?: string } | undefined)?.code).toBe("SANDBOX_DENIED");
+    expect(fetched).toBe(1);
   });
 });

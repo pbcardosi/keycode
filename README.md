@@ -247,6 +247,24 @@ installation, point the server at a `tsserver.js`:
 
 ---
 
+## Security checks
+
+- **WebFetch** resolves each hostname before requesting it and blocks results in
+  loopback, private, link-local, CGNAT, documentation, benchmark, multicast, and
+  metadata ranges. Redirects are re-validated with a fresh DNS lookup. An
+  explicitly allowlisted host bypasses these checks.
+- **Write** and **Edit** scan content for common credentials before touching
+  disk. A new AWS, GitHub, Slack, Anthropic, OpenAI, Google, Groq, bearer, or
+  generic `api_key`/`token`/`secret`/`password` value is refused with
+  `SECRET_DETECTED`. Editing a file that already contains a credential is
+  allowed as long as the edit does not add another.
+- **Audit logs** and transcripts continue to redact known secret formats.
+
+DNS checks reduce SSRF risk but do not eliminate DNS rebinding between the check
+and the connection; a pinned-IP transport is still future work.
+
+---
+
 ## Permissions
 
 Every tool call goes through one permission pipeline, including MCP tools.

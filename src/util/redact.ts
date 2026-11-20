@@ -19,6 +19,16 @@ export function redact(input: string): string {
   return output;
 }
 
+export function scanSecrets(input: string): Array<{ kind: string; count: number }> {
+  const findings: Array<{ kind: string; count: number }> = [];
+  for (const [pattern, replacement] of PATTERNS) {
+    const kind = replacement.replace(/^\[REDACTED:|\]$/g, "");
+    const matches = input.match(pattern);
+    if (matches && matches.length > 0) findings.push({ kind, count: matches.length });
+  }
+  return findings;
+}
+
 export function redactDeep<T>(value: T): T {
   if (typeof value === "string") return redact(value) as T;
   if (Array.isArray(value)) return value.map((item) => redactDeep(item)) as T;

@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Tool, ToolContext, ToolResult } from "../contracts/tool.js";
 import { toolError } from "../contracts/tool.js";
 import { atomicWrite } from "../util/fsx.js";
+import { scanSecrets } from "../util/redact.js";
 import { guardPath, resolveUserPath } from "./shared.js";
 
 export const EditInput = z.object({
@@ -113,6 +114,19 @@ export function createEditTool(): Tool<EditInputType> {
         input.replace_all === true
           ? before.split(oldString).join(newString)
           : before.replace(oldString, newString);
+
+      const beforeCounts = new Map(scanSecrets(before).map((finding) => [finding.kind, finding.count]));
+      const introduced = scanSecrets(after).filter(
+        (finding) => finding.count > (beforeCounts.get(finding.kind) ?? 0),
+      );
+      if (introduced.length > 0) {
+        return toolError(
+          `SECRET_DETECTED: refusing to write ${input.file_path}; the edit would add ${introduced
+            .map((finding) => finding.kind)
+            .join(", ")}. Remove the credential or load it from an environment variable.`,
+          { code: "SECRET_DETECTED" },
+        );
+      }
 
       ctx.onMutation?.([path]);
       try {

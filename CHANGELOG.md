@@ -46,6 +46,10 @@ First alpha.
   free-form answers, and cancellation.
 - Busy-state broadcasts keep the browser and server in sync after errors,
   aborted turns, and model/session switches.
+- WebFetch now resolves hostnames and re-checks DNS on redirects, blocking
+  private, loopback, link-local, CGNAT, metadata, and multicast addresses.
+- Write and Edit refuse to introduce new credentials with `SECRET_DETECTED`,
+  while still allowing unrelated edits to files that already contain one.
 - VS Code extension that starts `keycode remote` and opens the shared web UI in
   a Simple Browser tab, with model, permission, and lifecycle settings.
 - VS Code editor context forwarding: active file and selection reach the web UI

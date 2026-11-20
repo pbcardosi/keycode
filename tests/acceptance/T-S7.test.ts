@@ -1,7 +1,10 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { redact, redactDeep } from "../../dist/util/redact.js";
-import { findSessionFile, makeHome, makeWorkspace, readJsonl, runCli } from "../helpers.js";
+import { redact, redactDeep, scanSecrets } from "../../dist/util/redact.js";
+import { createWriteTool } from "../../dist/tools/write.js";
+import { createEditTool } from "../../dist/tools/edit.js";
+import { findSessionFile, makeHome, makeToolCtx, makeWorkspace, readJsonl, runCli, textOf } from "../helpers.js";
 
 describe("T-S7: secret redaction", () => {
   it("redacts key formats and bearer tokens in transcripts", () => {
@@ -33,5 +36,49 @@ describe("T-S7: secret redaction", () => {
     expect(serialized).not.toContain("sk-ant-abc1234567890123");
     expect(serialized).not.toContain("ghp_1234567890abcdef1234");
     expect(serialized).toContain("[REDACTED:anthropic-key]");
+  });
+
+  it("refuses to write new secrets and allows unrelated edits", async () => {
+    const ws = makeWorkspace();
+    const ctx = makeToolCtx({ cwd: ws });
+    expect(scanSecrets("sk-ant-abc1234567890123")).toContainEqual({
+      kind: "anthropic-key",
+      count: 1,
+    });
+
+    const write = createWriteTool();
+    const blocked = await write.execute(
+      { file_path: "secret.ts", content: 'const key = "sk-ant-abc1234567890123";' },
+      ctx,
+    );
+    expect(blocked.ok).toBe(false);
+    expect((blocked.metadata as { code?: string } | undefined)?.code).toBe("SECRET_DETECTED");
+    expect(textOf(blocked)).toContain("SECRET_DETECTED");
+    expect(existsSync(join(ws, "secret.ts"))).toBe(false);
+
+    const edit = createEditTool();
+    writeFileSync(join(ws, "safe.ts"), "const value = 1;\n");
+    const editBlocked = await edit.execute(
+      {
+        file_path: "safe.ts",
+        old_string: "const value = 1;",
+        new_string: 'const value = "sk-ant-abc1234567890123";',
+      },
+      ctx,
+    );
+    expect(editBlocked.ok).toBe(false);
+    expect((editBlocked.metadata as { code?: string } | undefined)?.code).toBe("SECRET_DETECTED");
+    expect(readFileSync(join(ws, "safe.ts"), "utf8")).toBe("const value = 1;\n");
+
+    writeFileSync(
+      join(ws, "existing.ts"),
+      'const key = "sk-ant-abc1234567890123";\nconst value = 1;\n',
+    );
+    const allowed = await edit.execute(
+      { file_path: "existing.ts", old_string: "const value = 1;", new_string: "const value = 2;" },
+      ctx,
+    );
+    expect(allowed.ok).toBe(true);
+    expect(readFileSync(join(ws, "existing.ts"), "utf8")).toContain("const value = 2;");
   });
 });

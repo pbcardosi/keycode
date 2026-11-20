@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Tool, ToolContext, ToolResult } from "../contracts/tool.js";
 import { toolError, toolOk } from "../contracts/tool.js";
 import { atomicWrite } from "../util/fsx.js";
+import { scanSecrets } from "../util/redact.js";
 import { guardPath, resolveUserPath } from "./shared.js";
 
 export const WriteInput = z.object({
@@ -34,6 +35,16 @@ export function createWriteTool(): Tool<WriteInputType> {
             `File has not been read yet: ${input.file_path}. Read it before overwriting.`,
           );
         }
+      }
+
+      const secrets = scanSecrets(input.content);
+      if (secrets.length > 0) {
+        return toolError(
+          `SECRET_DETECTED: refusing to write ${input.file_path}; content looks like ${secrets
+            .map((finding) => finding.kind)
+            .join(", ")}. Remove the credential or load it from an environment variable.`,
+          { code: "SECRET_DETECTED" },
+        );
       }
 
       ctx.onMutation?.([path]);

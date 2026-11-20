@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { lookup as dnsLookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import type { Tool, ToolContext, ToolResult } from "../contracts/tool.js";
 import { toolError, toolOk } from "../contracts/tool.js";
 import { KeycodeError } from "../util/errors.js";
@@ -12,21 +14,62 @@ export const WebFetchInput = z.object({
 
 export type WebFetchInputType = z.infer<typeof WebFetchInput>;
 
+interface ResolvedAddress {
+  address: string;
+  family: number;
+}
+
+export type LookupFn = (hostname: string) => Promise<ResolvedAddress[]>;
+
 export interface WebFetchOptions {
   fetchImpl?: typeof fetch | undefined;
   allowHosts?: string[] | undefined;
   maxRedirects?: number | undefined;
+  lookupImpl?: LookupFn | undefined;
 }
 
 function blockedHost(host: string): boolean {
   const normalized = host.toLowerCase().replace(/^\[|\]$/g, "");
-  if (normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1") return true;
+  if (normalized === "localhost" || normalized.endsWith(".localhost")) return true;
+  if (normalized === "127.0.0.1" || normalized === "::1") return true;
   if (normalized === "169.254.169.254") return true;
   if (normalized.startsWith("169.254.")) return true;
   if (/^10\./.test(normalized)) return true;
   if (/^192\.168\./.test(normalized)) return true;
   if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(normalized)) return true;
   return false;
+}
+
+function blockedAddress(raw: string): boolean {
+  const address = raw.toLowerCase().replace(/^\[|\]$/g, "");
+  const family = isIP(address);
+  if (family === 4) {
+    const parts = address.split(".").map(Number);
+    const [a = -1, b = -1, c = -1] = parts;
+    if (a <= 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a === 192 && b === 0 && c === 0) return true;
+    if (a === 198 && (b === 18 || b === 19)) return true;
+    if (a >= 224) return true;
+    return false;
+  }
+  if (family === 6) {
+    if (address === "::" || address === "::1") return true;
+    if (address.startsWith("fe8") || address.startsWith("fe9") || address.startsWith("fea") || address.startsWith("feb")) {
+      return true;
+    }
+    if (address.startsWith("fc") || address.startsWith("fd")) return true;
+    if (address.startsWith("ff")) return true;
+    if (address.startsWith("::ffff:")) {
+      const mapped = address.slice("::ffff:".length);
+      if (isIP(mapped) === 4) return blockedAddress(mapped);
+    }
+    return false;
+  }
+  return true;
 }
 
 function validateUrl(raw: string, allowHosts: string[]): URL {
@@ -47,6 +90,39 @@ function validateUrl(raw: string, allowHosts: string[]): URL {
     url.protocol = "https:";
   }
   return url;
+}
+
+async function assertSafeUrl(
+  url: URL,
+  allowHosts: string[],
+  lookup: LookupFn,
+): Promise<void> {
+  if (allowHosts.includes(url.hostname)) return;
+  if (isIP(url.hostname.replace(/^\[|\]$/g, "")) !== 0) {
+    if (blockedAddress(url.hostname)) {
+      throw new KeycodeError("SANDBOX_DENIED", `Blocked private or loopback address: ${url.hostname}`);
+    }
+    return;
+  }
+  let addresses: ResolvedAddress[];
+  try {
+    addresses = await lookup(url.hostname);
+  } catch (error) {
+    throw new KeycodeError(
+      "PROVIDER_UNAVAILABLE",
+      `Cannot resolve ${url.hostname}: ${(error as Error).message}`,
+    );
+  }
+  if (addresses.length === 0) {
+    throw new KeycodeError("PROVIDER_UNAVAILABLE", `Cannot resolve ${url.hostname}`);
+  }
+  const unsafe = addresses.find((entry) => blockedAddress(entry.address));
+  if (unsafe) {
+    throw new KeycodeError(
+      "SANDBOX_DENIED",
+      `Blocked ${url.hostname}: resolves to private address ${unsafe.address}`,
+    );
+  }
 }
 
 export function htmlToMarkdown(html: string): string {
@@ -84,9 +160,13 @@ export function createWebFetchTool(options: WebFetchOptions = {}): Tool<WebFetch
     concurrency: "parallel",
     async execute(input: WebFetchInputType, ctx: ToolContext): Promise<ToolResult> {
       const allowHosts = options.allowHosts ?? [];
+      const lookup: LookupFn =
+        options.lookupImpl ??
+        (async (hostname) => await dnsLookup(hostname, { all: true, verbatim: true }));
       let url: URL;
       try {
         url = validateUrl(input.url, allowHosts);
+        await assertSafeUrl(url, allowHosts, lookup);
       } catch (error) {
         const keycode = error instanceof KeycodeError ? error : new KeycodeError("TOOL_INPUT_INVALID", String(error));
         return toolError(`${keycode.code}: ${keycode.userMessage}`, { code: keycode.code });
@@ -108,6 +188,7 @@ export function createWebFetchTool(options: WebFetchOptions = {}): Tool<WebFetch
             (response.status === 301 || response.status === 302 || response.status === 303 || response.status === 307 || response.status === 308)
           ) {
             url = validateUrl(new URL(location, url).toString(), allowHosts);
+            await assertSafeUrl(url, allowHosts, lookup);
             continue;
           }
           break;
