@@ -6,8 +6,8 @@ A free, local-first, bring-your-own-key coding agent for the terminal.
 Code v2.1.322. It is not affiliated with Anthropic and does not require an
 Anthropic account.
 
-**Status:** working alpha. All 90 features have passing acceptance tests; run
-from `dist/` (no published package yet).
+**Status:** working alpha. All 90 features have passing acceptance tests. Install
+from a local tarball or run from `dist/`; no registry package yet.
 
 ---
 
@@ -26,25 +26,64 @@ See `FEATURES.md` for the full free-key matrix.
 
 ---
 
-## Planned quickstart
+## Install
+
+The package is not on a registry yet. Build a tarball and install it globally:
 
 ```bash
-git clone <repo> && cd keycode
+npm install
+npm run pack:smoke      # verifies the tarball in a clean consumer project
+npm pack
+npm install -g ./keycode-cli-0.1.0.tgz
+keycode --version
+```
+
+Or link the working tree while developing:
+
+```bash
 npm install
 npm run build
+npm link
+keycode --version
+```
 
+Run without installing:
+
+```bash
+npm install
+npm run build
+node dist/cli/index.js --provider ollama
+```
+
+### Upgrade and remove
+
+```bash
+npm install -g ./keycode-cli-<new-version>.tgz
+npm uninstall -g keycode-cli
+```
+
+The package ships `dist/`, `README.md`, `LICENSE`, and `CHANGELOG.md` only.
+Tests, sources, and `node_modules` are excluded. `scripts/validate-package.mjs`
+checks the bin mapping, version, shebang, and license. CI runs `npm run verify`
+on Windows, macOS, and Linux with Node 22 and 24, plus a tarball install test.
+
+---
+
+## Quickstart
+
+```bash
 # Option A: a free hosted key (macOS/Linux)
 export GEMINI_API_KEY="your-key"
-node dist/cli/index.js --provider gemini --model gemini-2.5-flash
+keycode --provider gemini --model gemini-2.5-flash
 
 # Option A on Windows PowerShell
 $env:GEMINI_API_KEY="your-key"
-node dist/cli/index.js --provider gemini --model gemini-2.5-flash
+keycode --provider gemini --model gemini-2.5-flash
 
 # Option B: a local model, no key
 ollama serve
 ollama pull gemma4:e2b
-node dist/cli/index.js --provider ollama --model gemma4:e2b
+keycode --provider ollama --model gemma4:e2b
 ```
 
 Then, inside the TUI:
@@ -52,6 +91,18 @@ Then, inside the TUI:
 ```
 > explain this repository and run the tests
 ```
+
+If you run from source instead, replace `keycode` with
+`node dist/cli/index.js`.
+
+---
+
+## Release
+
+Tag a commit with `v<version>` and push the tag. The release workflow reruns
+`npm run verify` and `npm run pack:smoke`, packs the tarball, and attaches it to
+a GitHub release. Publishing to npm requires choosing an available package
+name, removing `"private": true`, and adding an `NPM_TOKEN`-based publish step.
 
 ---
 

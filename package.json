@@ -5,6 +5,20 @@
   "type": "module",
   "description": "A free, local-first, bring-your-own-key coding agent.",
   "license": "Apache-2.0",
+  "private": true,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "coding-agent",
+    "cli",
+    "terminal",
+    "ollama",
+    "byok"
+  ],
   "engines": {
     "node": ">=22"
   },
@@ -18,7 +32,10 @@
     "test": "npm run build && vitest run",
     "test:acceptance": "npm run build && vitest run tests/acceptance",
     "validate:spec": "node scripts/validate-spec.mjs",
-    "verify": "npm run validate:spec && npm run typecheck && npm test"
+    "validate:package": "node scripts/validate-package.mjs",
+    "pack:smoke": "npm run build && node scripts/pack-smoke.mjs",
+    "prepack": "npm run build",
+    "verify": "npm run validate:spec && npm run validate:package && npm run typecheck && npm test"
   },
   "dependencies": {
     "commander": "^14.0.0",
