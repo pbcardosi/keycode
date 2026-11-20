@@ -33,6 +33,8 @@ First alpha.
 - Text tool-call protocol for models without native tool support, and a guard
   that blocks three consecutive identical tool calls.
 - Model guidance for free and local providers in the README.
+- Local web UI for `keycode remote`: streaming replies, tool rows, diffs,
+  browser approvals, stop, and token pairing on loopback.
 
 ### Known limitations
 

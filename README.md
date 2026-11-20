@@ -144,6 +144,33 @@ name, removing `"private": true`, and adding an `NPM_TOKEN`-based publish step.
 
 ---
 
+## Web UI
+
+`keycode remote` serves a local browser interface:
+
+```powershell
+keycode remote --provider ollama
+# Remote Control: http://127.0.0.1:<port>/#token=...
+```
+
+Open the printed URL. The interface supports:
+
+- streamed replies and tool rows,
+- edit and write diffs in the approval dialog,
+- allow once / always / session / deny / cancel,
+- stop and reconnect,
+- pairing by token, with the server bound to loopback only.
+
+Static assets are public, but every conversation action and the WebSocket
+require the token. The page reads it from the URL fragment, so it is not sent in
+HTTP requests or logs. `--permission-mode` defaults to `manual`, since approvals
+happen in the browser.
+
+If the token is lost, stop the server and run the command again; a new token is
+generated. Pass `--token <value>` to reuse one on a trusted loopback setup.
+
+---
+
 ## Permissions
 
 Every tool call goes through one permission pipeline, including MCP tools.

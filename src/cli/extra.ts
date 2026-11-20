@@ -15,7 +15,9 @@ import { createCodeModeTool } from "../tools/codemode.js";
 import { createBrowserTool, type BrowserDriver } from "../integrations/browser.js";
 import { BackgroundSessions } from "../integrations/background.js";
 import { IdeBridge } from "../integrations/ide.js";
-import { startRemoteControl } from "../integrations/remote.js";
+import { startRemoteControl, defaultWebDir } from "../integrations/remote.js";
+import { PermissionBroker } from "../permissions/broker.js";
+import type { PromptChoice } from "../permissions/pipeline.js";
 import { createWorktree, listWorktrees, removeWorktree } from "../integrations/worktrees.js";
 import {
   buildPrComment,
@@ -383,29 +385,81 @@ export function registerExtraCommands(program: Command): void {
     .option("--token <token>", "pairing token")
     .option("--provider <id>", "provider id")
     .option("--model <id>", "model id")
-    .option("--permission-mode <mode>", "permission mode", "acceptEdits")
+    .option("--permission-mode <mode>", "permission mode", "manual")
     .action(async (...args: unknown[]) => {
       const cmd = args[args.length - 1] as Command;
       const options = opts(cmd);
+      const broker = new PermissionBroker();
       const setup = await createAgentSetup({
         cwd: process.cwd(),
         provider: typeof options.provider === "string" ? options.provider : undefined,
         model: typeof options.model === "string" ? options.model : undefined,
         permissionMode: options.permissionMode as PermissionMode,
+        prompter: broker,
       });
-      const controller = new AbortController();
+      let controller = new AbortController();
+      const remotePermission = (): {
+        id: string;
+        tool: string;
+        reason: string;
+        preview?: string;
+        diff?: string;
+      } | null => {
+        const pending = broker.current;
+        if (!pending) return null;
+        return {
+          id: pending.id,
+          tool: pending.request.tool,
+          reason: pending.decision.reason,
+          ...(pending.request.preview === undefined ? {} : { preview: pending.request.preview }),
+          ...(pending.request.diff === undefined ? {} : { diff: pending.request.diff }),
+        };
+      };
       const server = await startRemoteControl({
         ...(typeof options.token === "string" ? { token: options.token } : {}),
+        staticDir: defaultWebDir(),
         handler: {
+          info: () => ({
+            provider: setup.providerId,
+            model: setup.model,
+            sessionId: setup.sessionId,
+            permissionMode: setup.permissionMode,
+          }),
+          subscribe: (listener) => setup.agent.subscribe((event) => listener(event)),
           onPrompt: async (prompt) => {
             const result = await setup.agent.runTurn(prompt, controller.signal);
             return result.text;
           },
-          onStop: () => controller.abort(),
+          onStop: () => {
+            controller.abort();
+            broker.cancelAll();
+            controller = new AbortController();
+          },
+        },
+        permissions: {
+          current: remotePermission,
+          subscribe: (listener) => broker.subscribe(() => listener(remotePermission())),
+          resolve: (id, choice) => {
+            const behaviors: readonly string[] = [
+              "allow_once",
+              "allow_always",
+              "allow_session",
+              "deny",
+              "cancel",
+            ];
+            if (!behaviors.includes(choice)) return false;
+            return broker.resolveById(id, {
+              behavior: choice as PromptChoice["behavior"],
+            });
+          },
         },
       });
-      stdout.write(`Remote Control: ${server.url}\nToken: ${server.token}\nSession: ${setup.sessionId}\n`);
-      keepAlive(() => server.close());
+      stdout.write(`Remote Control: ${server.url}/#token=${server.token}\n`);
+      stdout.write(`Token: ${server.token}\nSession: ${setup.sessionId}\n`);
+      keepAlive(async () => {
+        broker.cancelAll();
+        await server.close();
+      });
     });
 
   program

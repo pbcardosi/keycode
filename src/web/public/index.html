@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>keycode</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="mark">&gt;_</span>
+          <span>keycode</span>
+        </div>
+        <div class="meta" id="meta"></div>
+        <div class="status" id="status" data-state="offline">offline</div>
+      </header>
+
+      <main class="transcript" id="transcript" aria-live="polite">
+        <section class="empty" id="empty">
+          <h1>Local coding agent</h1>
+          <p>Ask about the repository, run tests, or make a change.</p>
+          <ul>
+            <li>Tools and edits appear as they run.</li>
+            <li>Writes and commands ask for approval here.</li>
+            <li>Everything stays on this machine.</li>
+          </ul>
+        </section>
+      </main>
+
+      <footer class="composer">
+        <textarea
+          id="input"
+          rows="2"
+          placeholder="Ask keycode to do something… (Enter to send, Shift+Enter for a new line)"
+          autocomplete="off"
+        ></textarea>
+        <div class="actions">
+          <button id="stop" class="secondary" type="button" disabled>Stop</button>
+          <button id="send" type="button">Send</button>
+        </div>
+      </footer>
+    </div>
+
+    <div class="modal" id="token-modal" hidden>
+      <form class="dialog" id="token-form">
+        <h2>Pair this browser</h2>
+        <p>Paste the token printed by <code>keycode remote</code>.</p>
+        <input id="token-input" type="password" autocomplete="off" spellcheck="false" />
+        <button type="submit">Connect</button>
+      </form>
+    </div>
+
+    <div class="modal" id="permission-modal" hidden>
+      <div class="dialog permission" role="dialog" aria-modal="true" aria-labelledby="permission-title">
+        <h2 id="permission-title">Permission required</h2>
+        <p class="permission-tool" id="permission-tool"></p>
+        <p class="permission-reason" id="permission-reason"></p>
+        <pre class="permission-preview" id="permission-preview" hidden></pre>
+        <pre class="permission-diff" id="permission-diff" hidden></pre>
+        <div class="choices">
+          <button type="button" data-choice="allow_once">Allow once</button>
+          <button type="button" data-choice="allow_always" class="secondary">Allow always</button>
+          <button type="button" data-choice="allow_session" class="secondary">Allow for session</button>
+          <button type="button" data-choice="deny" class="danger">Deny</button>
+          <button type="button" data-choice="cancel" class="ghost">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

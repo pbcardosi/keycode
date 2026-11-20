@@ -51,6 +51,8 @@ try {
 
   for (const required of [
     "dist/cli/index.js",
+    "dist/web/public/index.html",
+    "dist/web/public/app.js",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",

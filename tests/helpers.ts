@@ -106,7 +106,7 @@ export interface WsTestClient {
   close(): void;
 }
 
-export async function connectWebSocket(port: number): Promise<WsTestClient> {
+export async function connectWebSocket(port: number, path = "/"): Promise<WsTestClient> {
   const socket = netConnect({ port, host: "127.0.0.1" });
   const key = randomBytes(16).toString("base64");
   const messages: string[] = [];
@@ -146,7 +146,7 @@ export async function connectWebSocket(port: number): Promise<WsTestClient> {
     socket.once("connect", () => {
       socket.write(
         [
-          "GET / HTTP/1.1",
+          `GET ${path} HTTP/1.1`,
           "Host: 127.0.0.1",
           "Upgrade: websocket",
           "Connection: Upgrade",
