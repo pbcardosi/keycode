@@ -39,6 +39,9 @@ First alpha.
   and a session list with new-session and resume-with-history.
 - Web UI session rename, fork, and delete, plus provider/model switching that
   keeps the current session and persists in the session file.
+- Neon glass web UI theme: charcoal base, cyan/magenta/lime accents, grid
+  background, glass panels, SVG tool icons, glow states, and reduced-motion
+  support. Fonts use local stacks with no network requests.
 - VS Code extension that starts `keycode remote` and opens the shared web UI in
   a Simple Browser tab, with model, permission, and lifecycle settings.
 - VS Code editor context forwarding: active file and selection reach the web UI

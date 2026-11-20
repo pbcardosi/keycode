@@ -60,11 +60,26 @@ function scrollIfNearBottom() {
   if (distance < 90) transcript.scrollTop = transcript.scrollHeight;
 }
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+function toolIcon() {
+  const wrapper = element("span", "icon");
+  wrapper.setAttribute("aria-hidden", "true");
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "icon-svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  const path = document.createElementNS(SVG_NS, "path");
+  path.setAttribute("d", "M8 8l-4 4 4 4M16 8l4 4-4 4");
+  svg.appendChild(path);
+  wrapper.appendChild(svg);
+  return wrapper;
 }
 
 function hideEmpty() {
@@ -108,7 +123,7 @@ function addToolRow(event) {
   const key = event.id ?? `${event.name}-${tools.size}`;
   const row = element("div", "tool");
   row.dataset.status = "pending";
-  row.appendChild(element("span", "icon", "⚙"));
+  row.appendChild(toolIcon());
   row.appendChild(element("span", "name", event.name ?? "tool"));
   const detail = toolDetail(event.input);
   if (detail) row.appendChild(element("span", "detail", `· ${detail}`));

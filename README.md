@@ -159,6 +159,7 @@ appears, paste either the token or the full printed URL.
 Open the printed URL. The interface supports:
 
 - streamed replies and tool rows,
+- neon glass theme with a grid background, SVG tool icons, and reduced-motion support,
 - Markdown rendering, fenced code blocks, and copy buttons,
 - edit and write diffs in the approval dialog,
 - allow once / always / session / deny / cancel,

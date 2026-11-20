@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#121212" />
     <title>keycode</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
@@ -37,7 +38,12 @@
 
       <footer class="composer">
         <div class="context-bar" id="context-bar" hidden>
-          <span class="context-icon">📎</span>
+          <span class="context-icon" aria-hidden="true">
+            <svg class="icon-svg" viewBox="0 0 24 24">
+              <path d="M10 13a5 5 0 0 0 7.54.54l2-2a5 5 0 0 0-7.07-7.07l-1.14 1.14" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-2 2a5 5 0 0 0 7.07 7.07l1.14-1.14" />
+            </svg>
+          </span>
           <span class="context-label" id="context-label"></span>
           <button id="context-clear" class="ghost" type="button">Detach</button>
         </div>
