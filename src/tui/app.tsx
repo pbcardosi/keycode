@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, render, useApp, useStdin } from "ink";
-import { randomUUID } from "node:crypto";
 import type { AgentEvent } from "../app/agent.js";
 import type { Message } from "../contracts/message.js";
 import type { AgentSetup } from "../app/factory.js";
@@ -43,55 +42,91 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
   const { agent } = setup;
   const initial = setup.store.load(setup.sessionId);
   const [messages, setMessages] = useState<Message[]>(initial.messages);
+  const [streamText, setStreamText] = useState("");
   const [tools, setTools] = useState<ToolRow[]>([]);
   const [input, setInput] = useState("");
   const [todos, setTodos] = useState(agent.state.todos);
   const [spinner, setSpinner] = useState(0);
   const [busy, setBusy] = useState(false);
   const app = useApp();
-  const { stdin } = useStdin();
+  const { stdin, setRawMode, isRawModeSupported } = useStdin();
   const controllerRef = useRef(new AbortController());
   const inputRef = useRef("");
+  const busyRef = useRef(false);
   const submitRef = useRef<(line: string) => void>(() => undefined);
   inputRef.current = input;
+  busyRef.current = busy;
+
+  useEffect(() => {
+    if (typeof setRawMode === "function" && isRawModeSupported) setRawMode(true);
+    return () => {
+      if (typeof setRawMode === "function" && isRawModeSupported) setRawMode(false);
+    };
+  }, [isRawModeSupported, setRawMode]);
 
   useEffect(() => {
     const handleData = (data: string): void => {
       const text = data.toString();
-      for (const char of text) {
+      let index = 0;
+      while (index < text.length) {
+        const char = text[index] ?? "";
+        if (char === "\x1b") {
+          const next = text[index + 1];
+          if (next === "[" || next === "O") {
+            index += 2;
+            while (index < text.length && !/[A-Za-z~]/.test(text[index] ?? "")) index += 1;
+            index += 1;
+            continue;
+          }
+          if (busyRef.current) {
+            controllerRef.current.abort();
+            controllerRef.current = new AbortController();
+          } else {
+            app.exit();
+          }
+          index += 1;
+          continue;
+        }
+        if (char === "\x03") {
+          if (busyRef.current) {
+            controllerRef.current.abort();
+            controllerRef.current = new AbortController();
+          } else {
+            app.exit();
+          }
+          index += 1;
+          continue;
+        }
         if (char === "\n" || char === "\r") {
           const pending = inputRef.current.trim();
           if (pending.length > 0) void submitRef.current(pending);
+          index += 1;
           continue;
         }
         if (char === "\x7f" || char === "\b") {
           setInput((previous) => previous.slice(0, -1));
+          index += 1;
           continue;
         }
-        if (char.length === 1 && char >= " ") {
-          setInput((previous) => previous + char);
-        }
+        if (char >= " ") setInput((previous) => previous + char);
+        index += 1;
       }
     };
     stdin.on("data", handleData);
-    stdin.on("end", () => {
+    const onEnd = (): void => {
       app.exit();
-    });
+    };
+    stdin.on("end", onEnd);
     return () => {
       stdin.off("data", handleData);
+      stdin.off("end", onEnd);
     };
   }, [stdin, app]);
 
   useEffect(() => {
     const unsubscribe = agent.subscribe((event: AgentEvent) => {
       if (event.type === "text") {
-        const message: Message = {
-          id: newId("m"),
-          role: "assistant",
-          content: [{ type: "text", text: event.delta }],
-          timestamp: new Date().toISOString(),
-        };
-        setMessages((previous) => [...previous.slice(-MAX_TRANSCRIPT + 1), message]);
+        setStreamText((previous) => previous + event.delta);
       } else if (event.type === "tool_start") {
         setTools((previous) => [
           ...previous,
@@ -106,13 +141,15 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
           ),
         );
       } else if (event.type === "done") {
+        setStreamText("");
         setTools([]);
         setBusy(false);
+        setMessages(setup.store.load(setup.sessionId).messages.slice(-MAX_TRANSCRIPT));
       }
       setTodos([...agent.state.todos]);
     });
     return unsubscribe;
-  }, [agent]);
+  }, [agent, setup]);
 
   useEffect(() => {
     const timer = setInterval(() => setSpinner((value) => value + 1), 100);
@@ -137,21 +174,19 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
       if (result.exit) app.exit();
       if (result.clear) onClear?.();
       setInput("");
+      setStreamText("");
       syncFromStore();
       return;
     }
+    if (controllerRef.current.signal.aborted) controllerRef.current = new AbortController();
     setBusy(true);
+    setStreamText("");
+    setTools([]);
     saveDraft(setup.home, setup.sessionId, text);
     try {
       await agent.runTurn(text, controllerRef.current.signal);
     } catch (error) {
-      const message: Message = {
-        id: newId("m"),
-        role: "assistant",
-        content: [{ type: "text", text: `Error: ${(error as Error).message}` }],
-        timestamp: new Date().toISOString(),
-      };
-      setMessages((previous) => [...previous.slice(-MAX_TRANSCRIPT + 1), message]);
+      setStreamText(`Error: ${(error as Error).message}`);
     } finally {
       setBusy(false);
       setInput("");
@@ -174,7 +209,9 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
   return (
     <Box flexDirection="column">
       <Box flexDirection="column" flexGrow={1}>
-        {messages.length === 0 && <Text dimColor>keycode — type a prompt and press Enter.</Text>}
+        {messages.length === 0 && streamText.length === 0 && (
+          <Text dimColor>keycode — type a prompt and press Enter.</Text>
+        )}
         {messages.map((message, index) => (
           <Box key={message.id ?? String(index)} flexDirection="column" marginBottom={1}>
             <Text color={message.role === "user" ? "cyan" : "green"}>
@@ -183,11 +220,17 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
             <Text>{renderMarkdown(messageText(message))}</Text>
           </Box>
         ))}
+        {streamText.length > 0 && (
+          <Box flexDirection="column" marginBottom={1}>
+            <Text color="green">keycode:</Text>
+            <Text>{renderMarkdown(streamText)}</Text>
+          </Box>
+        )}
         {tools.length > 0 && (
           <Box flexDirection="column">
-            {tools.map((row) => (
+            {tools.map((row, index) => (
               <Text
-                key={`${row.name}-${row.status}-${Math.random()}`}
+                key={`${row.name}-${index}-${row.status}`}
                 color={
                   row.status === "pending"
                     ? "yellow"
@@ -205,19 +248,14 @@ export function TuiApp({ setup, onClear }: TuiAppProps): React.ReactElement {
         )}
         {todos.length > 0 && <Text dimColor>{renderTodos(todos)}</Text>}
       </Box>
-      <Box borderStyle="round" paddingX={1}>
+      <Box>
+        <Text color="cyan">{"› "}</Text>
         <Text>{input}</Text>
-        <Text color="gray" dimColor>
-          {"  Enter to send · Esc to exit"}
-        </Text>
+        <Text dimColor>{busy ? "  Esc aborts" : "  Enter to send · Esc to exit"}</Text>
       </Box>
       <Text dimColor>{footer}</Text>
     </Box>
   );
-}
-
-function newId(prefix: string): string {
-  return `${prefix}_${randomUUID().replaceAll("-", "").slice(0, 16)}`;
 }
 
 export interface RunTuiOptions {
