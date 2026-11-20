@@ -24,6 +24,12 @@
         <div class="status" id="status" data-state="offline">offline</div>
       </header>
 
+      <div class="trust-bar" id="trust-bar" hidden>
+        <span class="trust-icon" aria-hidden="true">!</span>
+        <span class="trust-label" id="trust-label"></span>
+        <button id="trust-review" class="chip" type="button">Review</button>
+      </div>
+
       <main class="transcript" id="transcript" aria-live="polite">
         <section class="empty" id="empty">
           <h1>Local coding agent</h1>
@@ -141,6 +147,21 @@
           <button type="submit">Submit</button>
         </div>
       </form>
+    </div>
+
+    <div class="modal" id="trust-modal" hidden>
+      <div class="dialog trust" role="dialog" aria-modal="true" aria-labelledby="trust-title">
+        <h2 id="trust-title">Project trust</h2>
+        <p>
+          This workspace contains project-controlled commands, permissions, or drivers. Review
+          them before allowing project settings to apply.
+        </p>
+        <div class="trust-items" id="trust-items"></div>
+        <div class="choices">
+          <button type="button" id="trust-cancel" class="ghost">Keep restricted</button>
+          <button type="button" id="trust-accept">Trust workspace</button>
+        </div>
+      </div>
     </div>
 
     <script src="/app.js" type="module"></script>

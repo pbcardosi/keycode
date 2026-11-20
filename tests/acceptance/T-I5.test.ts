@@ -419,4 +419,49 @@ describe("T-I5: Remote Control", () => {
     client.close();
     await server.close();
   });
+
+  it("reviews project trust and applies it over WebSocket", async () => {
+    let accepted: boolean | null = null;
+    const state = {
+      trusted: false,
+      changed: false,
+      fingerprint: "fingerprint-1",
+      items: [
+        { kind: "permissions", name: ".keycode/settings.json: allow", detail: "Bash(npm test)" },
+      ],
+    };
+    const server = await startRemoteControl({
+      token: "pair-token",
+      handler: {
+        onPrompt: async () => "ok",
+        trust: () => state,
+        setTrust: (accept) => {
+          accepted = accept;
+          state.trusted = accept;
+          return {
+            provider: "fake",
+            model: "fake-model",
+            sessionId: "12345678-0000-0000-0000-000000000000",
+            permissionMode: "manual",
+          };
+        },
+      },
+    });
+
+    const port = Number(new URL(server.url).port);
+    const client = await connectWebSocket(port, "/?token=pair-token");
+    const hello = (await nextOfType(client, "hello")) as {
+      trust: { trusted: boolean; items: Array<{ detail: string }> } | null;
+    };
+    expect(hello.trust?.trusted).toBe(false);
+    expect(hello.trust?.items[0]?.detail).toBe("Bash(npm test)");
+
+    client.send(JSON.stringify({ type: "trust", accept: true }));
+    const trust = (await nextOfType(client, "trust")) as { trust: { trusted: boolean } };
+    expect(trust.trust.trusted).toBe(true);
+    expect(accepted).toBe(true);
+
+    client.close();
+    await server.close();
+  });
 });

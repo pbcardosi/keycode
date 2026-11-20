@@ -45,7 +45,8 @@ import { ArtifactStore } from "../artifacts/store.js";
 import { createBrowserTool, type BrowserDriver } from "../integrations/browser.js";
 import { pathToFileURL } from "node:url";
 import { BudgetGuard, type Pricing } from "../providers/budget.js";
-import { isTrusted } from "./trust.js";
+import { trustStatus, trustWorkspace } from "./trust.js";
+import { buildTrustManifest, type TrustManifest, type TrustState } from "./trustManifest.js";
 import { Agent } from "./agent.js";
 import type { Provider } from "../contracts/provider.js";
 import type { Question, QuestionResult, Tool } from "../contracts/tool.js";
@@ -84,6 +85,7 @@ export interface AgentSetupOptions {
   fetchImpl?: typeof fetch | undefined;
   tools?: ReturnType<typeof createCoreTools> | undefined;
   trust?: boolean | undefined;
+  trustPrompt?: ((manifest: TrustManifest) => Promise<boolean>) | undefined;
   autoCompactThreshold?: number | undefined;
   hooks?: HookConfig | undefined;
   outputStyle?: string | undefined;
@@ -122,6 +124,7 @@ export interface AgentSetup {
   sandbox?: SandboxPolicy | undefined;
   lsp?: ReturnType<typeof createLspTool> | undefined;
   artifacts?: ReturnType<typeof createArtifactTool> | undefined;
+  trust: TrustState;
 }
 
 function parseMcpServerSettings(
@@ -235,10 +238,36 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   const home = options.home ?? keycodeHome(env);
   const cwd = resolve(options.cwd);
   const warnings: string[] = [];
-  const trusted = options.trust ?? isTrusted(home, cwd);
+  const manifest = buildTrustManifest(cwd);
+  let trusted: boolean;
+  let changed = false;
+  if (options.trust !== undefined) {
+    trusted = options.trust;
+  } else {
+    const status = trustStatus(home, cwd, manifest.fingerprint);
+    trusted = status === "trusted";
+    changed = status === "changed";
+    if (!trusted && manifest.items.length > 0 && options.trustPrompt !== undefined) {
+      const approved = await options.trustPrompt(manifest);
+      if (approved) {
+        trustWorkspace(home, cwd, manifest.fingerprint);
+        trusted = true;
+        changed = false;
+      }
+    }
+    if (manifest.items.length === 0) {
+      trusted = true;
+      changed = false;
+    }
+  }
   const loaded = loadSettings({ cwd, home, env, projectLayers: trusted });
   const settings = loaded.settings;
   warnings.push(...loaded.warnings);
+  if (!trusted && manifest.items.length > 0) {
+    warnings.push(
+      "Project settings are ignored until this workspace is trusted. Run with --trust or approve the workspace in the UI.",
+    );
+  }
   const store = new SessionStore(home, cwd);
 
   let existing = null;
@@ -645,6 +674,12 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     ...(sandbox === undefined ? {} : { sandbox }),
     ...(lspTool === undefined ? {} : { lsp: lspTool }),
     ...(artifactsTool === undefined ? {} : { artifacts: artifactsTool }),
+    trust: {
+      trusted,
+      changed,
+      items: manifest.items,
+      fingerprint: manifest.fingerprint,
+    },
   };
 }
 

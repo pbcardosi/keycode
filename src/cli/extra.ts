@@ -7,6 +7,7 @@ import { stdout } from "node:process";
 import type { PermissionMode } from "../contracts/permissions.js";
 import type { ToolContext } from "../contracts/tool.js";
 import { createAgentSetup, type AgentSetupOptions } from "../app/factory.js";
+import { trustWorkspace, untrustWorkspace } from "../app/trust.js";
 import { PRESETS } from "../providers/presets.js";
 import { keycodeHome, projectDir } from "../util/paths.js";
 import { silentLogger } from "../util/logger.js";
@@ -510,6 +511,21 @@ export function registerExtraCommands(program: Command): void {
         staticDir: defaultWebDir(),
         handler: {
           info: () => describe(setup),
+          trust: () => setup.trust,
+          setTrust: async (accept) => {
+            const sessionId = setup.sessionId;
+            if (accept) {
+              trustWorkspace(setup.home, setup.store.cwd, setup.trust.fingerprint);
+            } else {
+              untrustWorkspace(setup.home, setup.store.cwd);
+            }
+            return activate({
+              resume: sessionId,
+              provider: setup.providerId,
+              model: setup.model,
+              trust: accept,
+            });
+          },
           subscribe: (listener) => {
             eventListeners.add(listener);
             return () => {

@@ -6,7 +6,8 @@ import { createAgentSetup, type AgentSetupOptions } from "../app/factory.js";
 import { PERMISSION_MODES, type PermissionMode } from "../contracts/permissions.js";
 import { KeycodeError, formatError, toKeycodeError } from "../util/errors.js";
 import { keycodeHome } from "../util/paths.js";
-import { isTrusted, trustWorkspace } from "../app/trust.js";
+import { manifestSummary, type TrustManifest } from "../app/trustManifest.js";
+import { createInterface } from "node:readline/promises";
 import { SessionStore } from "../storage/session.js";
 import { AuditLog } from "../permissions/audit.js";
 import { runDoctor, formatDoctor } from "./doctor.js";
@@ -138,6 +139,20 @@ function setupOptions(options: CliOptions): AgentSetupOptions {
   };
 }
 
+async function promptForTrust(manifest: TrustManifest): Promise<boolean> {
+  process.stdout.write("This workspace contains project-controlled commands or permissions:\n\n");
+  process.stdout.write(`${manifestSummary(manifest)}\n\n`);
+  const readline = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = await readline.question(
+      "Trust this workspace and allow these? Project settings will apply on approval. [y/N] ",
+    );
+    return /^y(es)?$/i.test(answer.trim());
+  } finally {
+    readline.close();
+  }
+}
+
 function installSigint(controller: AbortController): void {
   let count = 0;
   process.on("SIGINT", () => {
@@ -214,12 +229,13 @@ program
     }
 
     const code = await runInteractive(async (prompter) => {
-      const setup = await createAgentSetup({ ...setupOptions(options), prompter });
+      const setup = await createAgentSetup({
+        ...setupOptions(options),
+        prompter,
+        trustPrompt: promptForTrust,
+      });
       if (setup.warnings.length > 0) {
         for (const warning of setup.warnings) process.stderr.write(`warning: ${warning}\n`);
-      }
-      if (!isTrusted(setup.home, setup.store.cwd)) {
-        trustWorkspace(setup.home, setup.store.cwd);
       }
       return setup;
     });

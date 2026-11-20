@@ -21,6 +21,10 @@ const contextLabel = $("context-label");
 const questionModal = $("question-modal");
 const questionForm = $("question-form");
 const questionBody = $("question-body");
+const trustBar = $("trust-bar");
+const trustLabel = $("trust-label");
+const trustModal = $("trust-modal");
+const trustItems = $("trust-items");
 const sessionModal = $("session-modal");
 const sessionList = $("session-list");
 const sessionsButton = $("sessions-button");
@@ -50,6 +54,7 @@ let providers = [];
 let sessions = [];
 let pendingSessionAction = null;
 let currentQuestion = null;
+let trustState = null;
 let currentAssistant = null;
 let renderTimer = null;
 const tools = new Map();
@@ -277,6 +282,44 @@ function submitQuestion(cancelled) {
   send({ type: "answer", id, answers });
 }
 
+function applyTrust(trust) {
+  trustState = trust;
+  if (
+    !trust ||
+    trust.trusted === true ||
+    !Array.isArray(trust.items) ||
+    trust.items.length === 0
+  ) {
+    trustBar.hidden = true;
+    trustModal.hidden = true;
+    return;
+  }
+  const count = trust.items.length;
+  trustLabel.textContent = trust.changed
+    ? "Project configuration changed. Review before applying it."
+    : `Project wants ${count} project-controlled setting${count === 1 ? "" : "s"}.`;
+  trustBar.hidden = false;
+}
+
+function openTrustReview() {
+  if (!trustState || !Array.isArray(trustState.items)) return;
+  trustItems.textContent = "";
+  for (const item of trustState.items) {
+    const row = element("div", "trust-item");
+    row.appendChild(element("span", "trust-kind", item.kind ?? "item"));
+    row.appendChild(element("span", "trust-name", item.name ?? ""));
+    row.appendChild(element("span", "trust-detail", item.detail ?? ""));
+    trustItems.appendChild(row);
+  }
+  trustModal.hidden = false;
+}
+
+function sendTrust(accept) {
+  trustModal.hidden = true;
+  setStatus("switching", "busy");
+  send({ type: "trust", accept });
+}
+
 function ensureAssistant() {
   if (currentAssistant === null) {
     currentAssistant = { body: addMessage("assistant", "", true), raw: "" };
@@ -496,6 +539,7 @@ function handleMessage(message) {
       renderContext(message.context ?? null);
       showPermission(message.permission ?? null);
       showQuestion(message.question ?? null);
+      applyTrust(message.trust ?? null);
       if (message.busy === true) startTurn();
       else setStatus("ready", "ready");
       break;
@@ -507,6 +551,9 @@ function handleMessage(message) {
       break;
     case "question":
       showQuestion(message.question ?? null);
+      break;
+    case "trust":
+      applyTrust(message.trust ?? null);
       break;
     case "busy":
       applyBusy(message.busy === true);
@@ -693,6 +740,20 @@ $("model-cancel").addEventListener("click", () => {
 
 $("context-clear").addEventListener("click", () => {
   send({ type: "clear_context" });
+});
+
+$("trust-review").addEventListener("click", openTrustReview);
+
+$("trust-accept").addEventListener("click", () => {
+  sendTrust(true);
+});
+
+$("trust-cancel").addEventListener("click", () => {
+  sendTrust(false);
+});
+
+trustModal.addEventListener("click", (event) => {
+  if (event.target === trustModal) trustModal.hidden = true;
 });
 
 sessionForm.addEventListener("submit", (event) => {

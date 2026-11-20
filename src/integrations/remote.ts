@@ -4,6 +4,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { Duplex } from "node:stream";
 import type { Question, QuestionResult } from "../contracts/tool.js";
+import type { TrustState } from "../app/trustManifest.js";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { acceptWebSocket, type WsConnection } from "./ws.js";
@@ -72,6 +73,8 @@ export interface RemoteHandler {
   onStop?: (() => void) | undefined;
   subscribe?: ((listener: (event: unknown) => void) => () => void) | undefined;
   info?: (() => RemoteInfo) | undefined;
+  trust?: (() => TrustState) | undefined;
+  setTrust?: ((accept: boolean) => Promise<RemoteInfo> | RemoteInfo) | undefined;
   sessions?: (() => Promise<RemoteSession[]> | RemoteSession[]) | undefined;
   history?: (() => unknown[]) | undefined;
   resume?: ((id: string | null) => Promise<RemoteInfo> | RemoteInfo) | undefined;
@@ -417,6 +420,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         info: info(),
         permission: currentPermission(),
         question: currentQuestion(),
+        trust: options.handler.trust?.() ?? null,
         history: history(),
         context,
         busy,
@@ -441,6 +445,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         selection?: unknown;
         answers?: unknown;
         cancelled?: boolean;
+        accept?: boolean;
       };
       try {
         message = JSON.parse(text) as typeof message;
@@ -490,6 +495,39 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         if (!resolved) {
           connection.send(JSON.stringify({ type: "error", message: "question is no longer pending" }));
         }
+        return;
+      }
+
+      if (message.type === "trust" && typeof message.accept === "boolean") {
+        if (options.handler.setTrust === undefined) {
+          connection.send(JSON.stringify({ type: "error", message: "trust review is not available" }));
+          return;
+        }
+        if (busy) {
+          connection.send(JSON.stringify({ type: "error", message: "Stop the current turn first" }));
+          return;
+        }
+        setBusy(true);
+        void (async () => {
+          try {
+            const next = (await options.handler.setTrust?.(message.accept === true)) ?? info();
+            broadcast({ type: "trust", trust: options.handler.trust?.() ?? null });
+            broadcast({
+              type: "session",
+              info: next,
+              history: history(),
+              permission: currentPermission(),
+              question: currentQuestion(),
+            });
+            broadcast({ type: "sessions", sessions: await sessions() });
+          } catch (error) {
+            connection.send(
+              JSON.stringify({ type: "error", message: (error as Error).message || "trust update failed" }),
+            );
+          } finally {
+            setBusy(false);
+          }
+        })();
         return;
       }
 

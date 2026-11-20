@@ -289,6 +289,35 @@ in untrusted workspaces.
 
 ---
 
+## Workspace trust
+
+Project settings can run hooks, MCP servers, language servers, browser drivers,
+and commands, and can add permission rules. Before any of that applies, keycode
+shows a review:
+
+- TUI: a terminal prompt lists each item and asks for approval.
+- Web UI and VS Code: a project-trust banner opens a review dialog with
+  **Keep restricted** and **Trust workspace**.
+
+The review lists:
+
+- permission `allow`/`ask` rules,
+- hook commands by event,
+- MCP servers with their command or URL,
+- LSP commands,
+- browser driver modules,
+- environment keys,
+- project commands, skills, agents, and output styles with content hashes.
+
+Approval is stored in `~/.keycode/trust.json` with a fingerprint. If any
+project-controlled item changes, keycode asks again instead of silently applying
+the new configuration.
+
+Headless runs cannot prompt, so they stay restricted unless you pass `--trust`.
+Untrusted project settings are ignored.
+
+---
+
 ## Security checks
 
 - **WebFetch** resolves each hostname before requesting it and blocks results in

@@ -54,6 +54,9 @@ First alpha.
   versioned HTML previews, a trusted allowlisted browser driver, and a
   persistent JavaScript tool bridge configured from settings.
 - LSP, browser, and Code Mode configuration is ignored in untrusted workspaces.
+- Workspace trust review in the TUI and web UI: project permissions, hooks, MCP,
+  LSP, browser drivers, env keys, and customization files are listed before
+  approval, with a fingerprint that re-prompts when they change.
 - VS Code extension that starts `keycode remote` and opens the shared web UI in
   a Simple Browser tab, with model, permission, and lifecycle settings.
 - VS Code editor context forwarding: active file and selection reach the web UI
