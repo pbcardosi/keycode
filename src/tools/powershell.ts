@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { Tool, ToolContext, ToolResult } from "../contracts/tool.js";
 import { toolError } from "../contracts/tool.js";
 import { runCommand } from "./bash.js";
+import { checkCommand } from "../sandbox/command.js";
 import { capOutput } from "./shared.js";
 
 export const PowerShellInput = z.object({
@@ -45,6 +46,14 @@ export function createPowerShellTool(): Tool<PowerShellInputType> {
         return toolError("TOOL_UNSUPPORTED: PowerShell is only available on Windows.", {
           code: "TOOL_UNSUPPORTED",
         });
+      }
+      if (ctx.sandbox !== undefined) {
+        const guarded = checkCommand(ctx.sandbox, input.command, ctx.cwd);
+        if (!guarded.allowed) {
+          return toolError(`SANDBOX_DENIED: ${guarded.reason ?? "blocked by the sandbox"}`, {
+            code: "SANDBOX_DENIED",
+          });
+        }
       }
       const result = await runCommand({
         command: shell.command,

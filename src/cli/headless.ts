@@ -119,6 +119,7 @@ export async function runHeadless(options: HeadlessOptions): Promise<HeadlessRes
   };
 
   const setup = await createAgentSetup({ ...options, onEvent });
+  for (const warning of setup.warnings) process.stderr.write(`warning: ${warning}\n`);
 
   if (outputFormat === "stream-json") {
     writeLine({

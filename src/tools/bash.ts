@@ -3,10 +3,11 @@ import { closeSync, openSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import type { Tool, ToolContext, ToolResult } from "../contracts/tool.js";
-import { toolOk } from "../contracts/tool.js";
+import { toolError, toolOk } from "../contracts/tool.js";
 import { newId } from "../util/ids.js";
 import { ensureDir } from "../util/fsx.js";
 import { tasksDir } from "../util/paths.js";
+import { checkCommand, sandboxSpawn } from "../sandbox/command.js";
 import { capOutput } from "./shared.js";
 
 export const BashInput = z.object({
@@ -119,16 +120,29 @@ export function createBashTool(): Tool<BashInputType> {
     readOnly: false,
     concurrency: "exclusive",
     async execute(input: BashInputType, ctx: ToolContext): Promise<ToolResult> {
+      if (ctx.sandbox !== undefined) {
+        const guarded = checkCommand(ctx.sandbox, input.command, ctx.cwd);
+        if (!guarded.allowed) {
+          return toolError(`SANDBOX_DENIED: ${guarded.reason ?? "blocked by the sandbox"}`, {
+            code: "SANDBOX_DENIED",
+          });
+        }
+      }
+      const launch =
+        ctx.sandbox === undefined
+          ? { command: input.command, args: [], shell: true }
+          : sandboxSpawn(ctx.sandbox, input.command, ctx.cwd);
+
       if (input.run_in_background === true) {
         const id = newId("task");
         const dir = tasksDir(ctx.home);
         ensureDir(dir);
         const logPath = join(dir, `${id}.log`);
         const fd = openSync(logPath, "a");
-        const child = spawn(input.command, {
+        const child = spawn(launch.command, launch.args, {
           cwd: ctx.cwd,
           env: { ...process.env, ...input.env },
-          shell: true,
+          shell: launch.shell,
           detached: false,
           windowsHide: true,
           stdio: ["ignore", fd, fd],
@@ -152,7 +166,9 @@ export function createBashTool(): Tool<BashInputType> {
       }
 
       const result = await runCommand({
-        command: input.command,
+        command: launch.command,
+        args: launch.args,
+        shell: launch.shell,
         cwd: ctx.cwd,
         env: input.env,
         timeoutMs: input.timeout,

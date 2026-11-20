@@ -1,6 +1,7 @@
 import type { ZodType } from "zod";
 import type { Clock } from "../util/clock.js";
 import type { Logger } from "../util/logger.js";
+import type { SandboxPolicy } from "../sandbox/index.js";
 import type { ContentBlock } from "./message.js";
 
 export interface PermissionDecision {
@@ -69,6 +70,7 @@ export interface ToolContext {
   clock: Clock;
   state: ToolState;
   home: string;
+  sandbox?: SandboxPolicy | undefined;
   askQuestions?: ((questions: Question[]) => Promise<QuestionResult>) | undefined;
   onMutation?: ((paths: string[]) => void) | undefined;
 }

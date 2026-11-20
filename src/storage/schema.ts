@@ -35,6 +35,14 @@ export const PermissionsSchema = z
   })
   .passthrough();
 
+export const SandboxSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    allowNetwork: z.boolean().optional(),
+    allowedHosts: z.array(z.string()).optional(),
+  })
+  .passthrough();
+
 export const SettingsSchema = z
   .object({
     $schema: z.string().optional(),
@@ -47,6 +55,7 @@ export const SettingsSchema = z
     providers: z.record(z.string(), ProviderConfigSchema).optional(),
     hooks: z.record(z.string(), z.unknown()).optional(),
     mcpServers: z.record(z.string(), z.unknown()).optional(),
+    sandbox: SandboxSchema.optional(),
     statusLine: z
       .union([z.string(), z.object({ type: z.string(), command: z.string() })])
       .nullable()

@@ -17,6 +17,7 @@ import type {
 import type { SessionStore } from "../storage/session.js";
 import type { CheckpointStore, RewindMode } from "../storage/checkpoints.js";
 import type { PermissionService } from "../permissions/pipeline.js";
+import type { SandboxPolicy } from "../sandbox/index.js";
 import type { BudgetGuard, Pricing } from "../providers/budget.js";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -52,6 +53,7 @@ export interface AgentOptions {
   home: string;
   cwd: string;
   workspaceRoots: string[];
+  sandbox?: SandboxPolicy | undefined;
   systemPrompt: string;
   buildPrompt?: (() => string) | undefined;
   clock?: Clock | undefined;
@@ -343,6 +345,7 @@ export class Agent {
       clock: this.options.clock ?? systemClock,
       state: this.toolState,
       home: this.options.home,
+      ...(this.options.sandbox === undefined ? {} : { sandbox: this.options.sandbox }),
       ...(this.options.askQuestions === undefined ? {} : { askQuestions: this.options.askQuestions }),
       onMutation: (paths) => {
         const view = this.options.store.load(this.options.sessionId);

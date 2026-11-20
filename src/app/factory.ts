@@ -19,6 +19,8 @@ import {
 import { loadMemory } from "../storage/memory.js";
 import { parseRule } from "../permissions/rules.js";
 import type { RuleScope } from "../contracts/permissions.js";
+import { createSandboxPolicy, sandboxFallbackWarning } from "../sandbox/index.js";
+import type { SandboxPolicy } from "../sandbox/index.js";
 import {
   CommandHookDispatcher,
   mergeHookConfigs,
@@ -87,6 +89,9 @@ export interface AgentSetupOptions {
   allowRules?: string[] | undefined;
   denyRules?: string[] | undefined;
   askRules?: string[] | undefined;
+  sandbox?: boolean | undefined;
+  sandboxNetwork?: boolean | undefined;
+  sandboxAllowedHosts?: string[] | undefined;
 }
 
 export interface AgentSetup {
@@ -109,6 +114,7 @@ export interface AgentSetup {
   outputStyle: string;
   autoMemory: AutoMemoryStore;
   mcpClients: McpClient[];
+  sandbox?: SandboxPolicy | undefined;
 }
 
 function parseMcpServerSettings(
@@ -342,6 +348,18 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
   const specs = toolSpecs(tools);
 
   const roots = [cwd, ...(options.addDirs ?? []).map((dir) => resolve(cwd, dir))];
+  const sandboxEnabled = options.sandbox ?? settings.sandbox?.enabled ?? false;
+  const sandbox = sandboxEnabled
+    ? createSandboxPolicy({
+        roots,
+        allowNetwork: options.sandboxNetwork ?? settings.sandbox?.allowNetwork ?? false,
+        allowedHosts: options.sandboxAllowedHosts ?? settings.sandbox?.allowedHosts ?? [],
+      })
+    : undefined;
+  if (sandbox !== undefined) {
+    const fallback = sandboxFallbackWarning(process.platform);
+    if (fallback !== null) warnings.push(fallback);
+  }
   const commands = allowCustomizations
     ? discoverCommands({
         cwd,
@@ -468,6 +486,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
       home,
       cwd,
       workspaceRoots: roots,
+      ...(sandbox === undefined ? {} : { sandbox }),
       systemPrompt: childSystemPrompt,
       buildPrompt,
       ...(budget === undefined ? {} : { budget }),
@@ -505,6 +524,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     home,
     cwd,
     workspaceRoots: roots,
+    ...(sandbox === undefined ? {} : { sandbox }),
     systemPrompt,
     buildPrompt,
     ...(budget === undefined ? {} : { budget }),
@@ -546,6 +566,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     outputStyle: activeStyle?.name ?? "default",
     autoMemory,
     mcpClients,
+    ...(sandbox === undefined ? {} : { sandbox }),
   };
 }
 

@@ -1,3 +1,4 @@
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -6,7 +7,9 @@ import {
   createSandboxPolicy,
   sandboxFallbackWarning,
 } from "../../dist/sandbox/index.js";
-import { makeWorkspace } from "../helpers.js";
+import { bwrapArgs, checkCommand, detectWrapper, seatbeltProfile } from "../../dist/sandbox/command.js";
+import { createBashTool } from "../../dist/tools/bash.js";
+import { makeHome, makeToolCtx, makeWorkspace, textOf } from "../helpers.js";
 
 describe("T-S5: sandbox", () => {
   it("restricts writes to roots and blocks network egress by default", () => {
@@ -30,5 +33,52 @@ describe("T-S5: sandbox", () => {
     expect(sandboxFallbackWarning("linux")).toBeNull();
     expect(sandboxFallbackWarning("darwin")).toBeNull();
     expect(sandboxFallbackWarning("win32")).toContain("not fully supported");
+  });
+
+  it("denies writes outside the root and network egress before execution", async () => {
+    const ws = makeWorkspace();
+    const outside = join(ws, "..", "sandbox-outside.txt");
+    rmSync(outside, { force: true });
+    const policy = createSandboxPolicy({ roots: [ws] });
+    const tool = createBashTool();
+    const ctx = makeToolCtx({ cwd: ws, sandbox: policy, home: makeHome() });
+
+    const denied = await tool.execute({ command: "echo hello > ../sandbox-outside.txt" }, ctx);
+    expect(denied.ok).toBe(false);
+    expect(textOf(denied)).toContain("SANDBOX_DENIED");
+    expect(existsSync(outside)).toBe(false);
+
+    const inside = await tool.execute({ command: "echo hello > inside.txt" }, ctx);
+    expect(inside.ok).toBe(true);
+    expect(readFileSync(join(ws, "inside.txt"), "utf8")).toContain("hello");
+
+    const blocked = await tool.execute({ command: "curl https://example.com" }, ctx);
+    expect(blocked.ok).toBe(false);
+    expect(textOf(blocked)).toContain("Network access to example.com");
+
+    const allowed = checkCommand(
+      createSandboxPolicy({ roots: [ws], allowedHosts: ["example.com"] }),
+      "curl https://api.example.com/data",
+      ws,
+    );
+    expect(allowed.allowed).toBe(true);
+  });
+
+  it("builds OS-level wrappers for macOS and Linux", () => {
+    const ws = makeWorkspace();
+    const policy = createSandboxPolicy({ roots: [ws] });
+    const profile = seatbeltProfile(policy);
+    expect(profile).toContain("(deny file-write*)");
+    expect(profile).toContain(ws.replace(/\\/g, "\\\\"));
+    expect(profile).toContain("(deny network*)");
+
+    const args = bwrapArgs(policy, "echo hi", ws);
+    expect(args).toContain("--unshare-net");
+    expect(args).toContain("--bind");
+    expect(args.slice(-3)).toEqual(["/bin/sh", "-c", "echo hi"]);
+
+    expect(detectWrapper("darwin", () => true)?.kind).toBe("seatbelt");
+    expect(detectWrapper("linux", () => true)?.kind).toBe("bwrap");
+    expect(detectWrapper("win32", () => true)).toBeNull();
   });
 });

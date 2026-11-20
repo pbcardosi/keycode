@@ -54,6 +54,9 @@ interface CliOptions {
   allow?: string[];
   deny?: string[];
   ask?: string[];
+  sandbox?: boolean;
+  sandboxNetwork?: boolean;
+  sandboxAllowHost?: string[];
   axScreenReader?: boolean;
 }
 
@@ -127,6 +130,11 @@ function setupOptions(options: CliOptions): AgentSetupOptions {
       ? {}
       : { denyRules: options.deny }),
     ...(options.ask === undefined || options.ask.length === 0 ? {} : { askRules: options.ask }),
+    ...(options.sandbox === true ? { sandbox: true } : {}),
+    ...(options.sandboxNetwork === true ? { sandboxNetwork: true } : {}),
+    ...(options.sandboxAllowHost === undefined || options.sandboxAllowHost.length === 0
+      ? {}
+      : { sandboxAllowedHosts: options.sandboxAllowHost }),
   };
 }
 
@@ -160,6 +168,9 @@ program
   .option("--allow <rule>", "allow rule, for example Bash(npm test) (repeatable)", collectRule, [] as string[])
   .option("--deny <rule>", "deny rule (repeatable)", collectRule, [] as string[])
   .option("--ask <rule>", "ask rule (repeatable)", collectRule, [] as string[])
+  .option("--sandbox", "confine writes to workspace roots and block network egress")
+  .option("--sandbox-network", "allow network egress in the sandbox")
+  .option("--sandbox-allow-host <host>", "allow a host in the sandbox (repeatable)", collectRule, [] as string[])
   .option("--dangerously-skip-permissions", "alias for --permission-mode bypassPermissions")
   .option("--max-budget-usd <amount>", "stop before exceeding this spend")
   .option("--add-dir <dirs...>", "additional workspace directories")

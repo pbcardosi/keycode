@@ -88,6 +88,43 @@ whole-tool grant.
 
 ---
 
+## Sandbox
+
+`--sandbox` confines commands to the workspace roots (plus `--add-dir` roots)
+and blocks network egress by default.
+
+```bash
+node dist/cli/index.js --provider ollama --sandbox -p "run the tests"
+node dist/cli/index.js --sandbox --sandbox-network --sandbox-allow-host api.example.com ...
+```
+
+Or in `settings.json`:
+
+```json
+{
+  "sandbox": { "enabled": true, "allowNetwork": false, "allowedHosts": ["api.example.com"] }
+}
+```
+
+Enforcement:
+
+- **macOS:** wraps commands with `/usr/bin/sandbox-exec` and a Seatbelt profile
+  that denies writes outside the roots and denies network unless allowed.
+- **Linux:** wraps commands with `bwrap` (`--unshare-net`, read-only root,
+  writable workspace roots) when installed.
+- **Windows (fallback):** no kernel sandbox. A static guard blocks redirection,
+  common write commands, and known network commands that target paths outside
+  the roots or hosts outside the allowlist, and startup prints the documented
+  fallback warning. Commands that perform I/O indirectly (for example a script
+  launched by an interpreter) are not contained by this fallback.
+
+The guard also runs before every command on all platforms, so an approved
+`bypassPermissions` command still cannot redirect output outside the roots.
+
+Process-count and memory limits are not enforced yet.
+
+---
+
 ## MCP servers
 
 Enabled entries in `settings.json` under `mcpServers` (stdio or HTTP/SSE) are

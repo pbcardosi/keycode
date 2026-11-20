@@ -266,6 +266,7 @@ export interface ToolCtxOptions {
   workspaceRoots?: string[] | undefined;
   askQuestions?: ToolContext["askQuestions"] | undefined;
   mode?: "manual" | "bypassPermissions" | "auto" | "dontAsk" | undefined;
+  sandbox?: ToolContext["sandbox"] | undefined;
 }
 
 export function makeToolCtx(options: ToolCtxOptions): ToolContext {
@@ -282,6 +283,7 @@ export function makeToolCtx(options: ToolCtxOptions): ToolContext {
     state: { readFiles: new Set(), todos: [], metadata: new Map() },
     home: options.home ?? makeHome(),
     ...(options.askQuestions === undefined ? {} : { askQuestions: options.askQuestions }),
+    ...(options.sandbox === undefined ? {} : { sandbox: options.sandbox }),
   };
 }
 
