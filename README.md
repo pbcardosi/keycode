@@ -1,4 +1,4 @@
-# KeyCode
+﻿# KeyCode
 
 A free, local-first, bring-your-own-key coding agent for the terminal.
 
@@ -35,7 +35,7 @@ yet. Build a tarball and install it globally:
 npm install
 npm run pack:smoke      # verifies the tarball in a clean consumer project
 npm pack
-npm install -g ./keycode-ai-0.1.0.tgz
+npm install -g ./keycode-ai-0.1.1.tgz
 keycode --version
 ```
 
@@ -196,7 +196,7 @@ same web UI in a VS Code editor tab.
 ```powershell
 cd editors/vscode
 npx @vscode/vsce package
-code --install-extension keycode-vscode-0.1.0.vsix
+code --install-extension keycode-vscode-0.1.1.vsix
 ```
 
 Then run **KeyCode: Open Chat** from the Command Palette. The extension has
@@ -410,7 +410,7 @@ Every tool call goes through one permission pipeline, including MCP tools.
 - **Headless:** there is no prompt, so an unapproved call is denied and the
   result names the exact rule to add, for example:
   `Add --allow "Bash(npm test)" or run interactively.`
-- **Rules:** repeatable and evaluated deny → ask → allow:
+- **Rules:** repeatable and evaluated deny â†’ ask â†’ allow:
 
 ```bash
 node dist/cli/index.js --provider ollama \
@@ -521,11 +521,11 @@ Each feature has exactly one acceptance test, named `T-<feature ID>`.
 
 ## Build plan
 
-1. **Part 1 — Free key, real work (weeks 1-4).** REPL, sessions, streaming,
+1. **Part 1 â€” Free key, real work (weeks 1-4).** REPL, sessions, streaming,
    free providers, core tools, permissions, memory, basic TUI.
-2. **Part 2 — Extensible and safe (weeks 5-8).** Web, MCP, LSP, subagents,
+2. **Part 2 â€” Extensible and safe (weeks 5-8).** Web, MCP, LSP, subagents,
    sandbox, hooks, skills, agents, plugins, teams, workflows, telemetry.
-3. **Part 3 — Scale and integrate (weeks 9-12).** SDK, GitHub, IDE, browser,
+3. **Part 3 â€” Scale and integrate (weeks 9-12).** SDK, GitHub, IDE, browser,
    Remote Control, self-hosted runner, background sessions, worktrees, release.
 
 Details and exit gates are in `SPEC.md` section 12.

@@ -71,7 +71,12 @@ export function resolveCredential(options: ResolveCredentialOptions): Credential
         shell: true,
         encoding: "utf8",
         timeout: 10_000,
-        env: { ...env },
+        // Shell helpers still need the host PATH to find interpreters such as
+        // node, which is not on the default PATH of every platform shell.
+        env: {
+          ...env,
+          PATH: env.PATH ?? env.Path ?? process.env.PATH ?? process.env.Path ?? "",
+        },
       }).trim();
       if (output.length > 0) {
         const ttl = options.helperTtlMs ?? 5 * 60_000;

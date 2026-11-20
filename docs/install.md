@@ -1,4 +1,4 @@
-# Install KeyCode
+﻿# Install KeyCode
 
 KeyCode is alpha. The npm package name is `keycode-ai`, but it has not been
 published to the public registry yet. Use a tarball until the first publish.
@@ -13,14 +13,14 @@ published to the public registry yet. Use a tarball until the first publish.
 ## From a release tarball
 
 ```bash
-npm install -g ./keycode-ai-0.1.0.tgz
+npm install -g ./keycode-ai-0.1.1.tgz
 keycode --version
 ```
 
 Windows PowerShell:
 
 ```powershell
-npm install -g .\keycode-ai-0.1.0.tgz
+npm install -g .\keycode-ai-0.1.1.tgz
 keycode --version
 ```
 
@@ -58,7 +58,7 @@ npm uninstall -g keycode-ai
 ```powershell
 cd editors/vscode
 npx @vscode/vsce package
-code --install-extension keycode-vscode-0.1.0.vsix --force
+code --install-extension keycode-vscode-0.1.1.vsix --force
 ```
 
 Verify the extension package against `SHA256SUMS` when one is published.

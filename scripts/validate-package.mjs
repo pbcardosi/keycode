@@ -4,15 +4,16 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const pkg = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
 const cli = readFileSync(resolve(root, "src/cli/index.ts"), "utf8");
+const versionSource = readFileSync(resolve(root, "src/version.ts"), "utf8");
 const failures = [];
 
 if (pkg.bin?.keycode !== "./dist/cli/index.js") {
   failures.push("package.json bin.keycode must point at ./dist/cli/index.js");
 }
 
-const version = /export const VERSION = "([^"]+)"/.exec(cli)?.[1];
+const version = /export const VERSION = "([^"]+)"/.exec(versionSource)?.[1];
 if (version === undefined) {
-  failures.push("src/cli/index.ts must export VERSION");
+  failures.push("src/version.ts must export VERSION");
 } else if (version !== pkg.version) {
   failures.push(`VERSION ${version} does not match package.json ${pkg.version}`);
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Track the CLI 0.1.1 patch release.
+
 ## 0.1.0
 
 - Initial VS Code extension.

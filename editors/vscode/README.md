@@ -1,4 +1,4 @@
-# KeyCode for VS Code
+﻿# KeyCode for VS Code
 
 This extension opens the KeyCode web UI in a VS Code editor tab. It reuses the
 same frontend as `keycode remote`, so streaming, tools, diffs, approvals,
@@ -12,7 +12,7 @@ sessions, Markdown, and model switching are all available unchanged.
 
   ```bash
   npm install && npm run build && npm pack
-  npm install -g ./keycode-ai-0.1.0.tgz
+  npm install -g ./keycode-ai-0.1.1.tgz
   keycode --version
   ```
 
@@ -101,5 +101,5 @@ No build step is required; the extension is plain CommonJS.
 ```bash
 cd editors/vscode
 npx @vscode/vsce package
-code --install-extension keycode-vscode-0.1.0.vsix
+code --install-extension keycode-vscode-0.1.1.vsix
 ```

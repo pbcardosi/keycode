@@ -14,6 +14,7 @@ import { silentLogger } from "../util/logger.js";
 import { systemClock } from "../util/clock.js";
 import { KeycodeError } from "../util/errors.js";
 import { runCommand } from "../tools/bash.js";
+import { VERSION } from "../version.js";
 import { createCodeModeTool } from "../tools/codemode.js";
 import { createBrowserTool, type BrowserDriver } from "../integrations/browser.js";
 import { BackgroundSessions } from "../integrations/background.js";
@@ -275,7 +276,7 @@ export function registerExtraCommands(program: Command): void {
     .description("Check the release feed for an update")
     .option("--feed <url>", "release feed URL")
     .option("--channel <channel>", "stable or latest", "stable")
-    .option("--current <version>", "current version", "0.1.0")
+    .option("--current <version>", "current version", VERSION)
     .option("--json", "emit JSON")
     .action(async (...args: unknown[]) => {
       const cmd = args[args.length - 1] as Command;
@@ -286,7 +287,7 @@ export function registerExtraCommands(program: Command): void {
       const check = await checkForUpdate({
         feedUrl: options.feed,
         channel: options.channel === "latest" ? "latest" : "stable",
-        currentVersion: typeof options.current === "string" ? options.current : "0.1.0",
+        currentVersion: typeof options.current === "string" ? options.current : VERSION,
       });
       emit(check, options.json);
     });

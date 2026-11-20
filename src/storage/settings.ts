@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, unwatchFile, watchFile } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { PermissionSettings } from "../contracts/permissions.js";
 import { keycodeHome, managedSettingsPath } from "../util/paths.js";
@@ -152,21 +152,19 @@ export function watchSettings(
   onChange: (loaded: LoadedSettings) => void,
   intervalMs = 250,
 ): () => void {
-  const paths = settingsCandidatePaths(options).filter((path) => existsSync(path));
-  let timer: NodeJS.Timeout | null = null;
-  const trigger = (): void => {
-    if (timer !== null) clearTimeout(timer);
-    timer = setTimeout(() => {
-      timer = null;
-      onChange(loadSettings(options));
-    }, intervalMs);
-  };
-  for (const path of paths) {
-    watchFile(path, { interval: intervalMs }, trigger);
-  }
+  // Polling reloads rather than relying on filesystem watch events: atomic
+  // replaces and platforms with coarse mtime resolution otherwise miss edits.
+  // The comparison is on the merged result, so unrelated churn does not fire.
+  let last = JSON.stringify(loadSettings(options).settings);
+  const timer = setInterval(() => {
+    const loaded = loadSettings(options);
+    const next = JSON.stringify(loaded.settings);
+    if (next === last) return;
+    last = next;
+    onChange(loaded);
+  }, intervalMs);
   return () => {
-    if (timer !== null) clearTimeout(timer);
-    for (const path of paths) unwatchFile(path);
+    clearInterval(timer);
   };
 }
 

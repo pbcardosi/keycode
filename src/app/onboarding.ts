@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { atomicWrite, ensureDir } from "../util/fsx.js";
+import { VERSION } from "../version.js";
 
 export const ONBOARDING_VERSION = 1;
 
@@ -32,7 +33,7 @@ export function onboardingText(): string {
 
 export function releaseNotes(): string {
   return [
-    "KeyCode 0.1.0",
+    `KeyCode ${VERSION}`,
     "- Part 1: interactive and headless sessions, free/local providers, core tools, permissions, memory, and TUI.",
     "- Part 2: hooks, commands, skills, subagents, web tools, notebooks, background tasks, sandbox, policy, privacy, and accessibility.",
     "See SPEC.md for the full feature catalog.",

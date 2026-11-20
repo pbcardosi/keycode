@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 import { checkNetwork, checkWrite } from "./index.js";
@@ -243,8 +243,19 @@ function escapeProfilePath(path: string): string {
   return path.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
+function canonicalPath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
 export function seatbeltProfile(policy: SandboxPolicy): string {
-  const writable = [...policy.roots, tmpdir()];
+  // Seatbelt matches the resolved path, so on platforms where temporary roots
+  // are symlinked (for example /var -> /private/var on macOS) the original
+  // spelling alone does not grant access to files under the root.
+  const writable = [...new Set([...policy.roots.flatMap((root) => [root, canonicalPath(root)]), tmpdir(), canonicalPath(tmpdir())])];
   const lines = [
     "(version 1)",
     "(allow default)",

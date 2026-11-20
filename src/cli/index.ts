@@ -15,7 +15,9 @@ import { authCommand } from "./auth.js";
 import { registerExtraCommands } from "./extra.js";
 import { resolve } from "node:path";
 
-export const VERSION = "0.1.0";
+import { VERSION } from "../version.js";
+
+export { VERSION };
 
 type SubCmd = {
   parent?: { opts(): Record<string, unknown> } | null;

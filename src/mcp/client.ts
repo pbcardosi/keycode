@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface, type Interface } from "node:readline";
 import { KeycodeError } from "../util/errors.js";
+import { VERSION } from "../version.js";
 
 export interface McpServerConfig {
   type?: "stdio" | "sse" | "http" | undefined;
@@ -95,7 +96,7 @@ export class McpClient {
     await this.request("initialize", {
       protocolVersion: "2024-11-05",
       capabilities: {},
-      clientInfo: { name: "KeyCode", version: "0.1.0" },
+      clientInfo: { name: "KeyCode", version: VERSION },
     });
     this.notify("notifications/initialized", {});
   }

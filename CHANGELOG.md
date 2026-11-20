@@ -4,6 +4,22 @@ All notable changes are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning.
 
+## [0.1.1] - 2026-11-20
+
+Cross-platform fixes found by the first CI release run.
+
+### Fixed
+
+- macOS `apiKeyHelper` commands now inherit `PATH`, so helpers that invoke
+  `node` or other tools outside the default shell path run correctly.
+- Seatbelt sandbox profiles include canonical paths, so writes inside
+  workspaces under symlinked temporary roots (for example `/var` on macOS)
+  are allowed as intended.
+- Settings hot reload polls the merged result instead of relying on
+  filesystem events, which missed atomic replaces and rapid writes.
+- Tests resolve the canonical project directory and let Ink render in CI,
+  removing platform-specific failures.
+
 ## [0.1.0] - 2026-11-20
 
 First alpha.

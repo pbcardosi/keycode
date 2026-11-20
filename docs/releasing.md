@@ -1,4 +1,4 @@
-# Release KeyCode
+﻿# Release KeyCode
 
 ## Version and changelog
 
@@ -44,8 +44,8 @@ before publishing.
 ## GitHub release
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.1
+git push origin v0.1.1
 ```
 
 `.github/workflows/release.yml` reruns verification, packs the tarball, writes
@@ -55,7 +55,7 @@ git push origin v0.1.0
 
 ```powershell
 cd editors/vscode
-npx @vscode/vsce package --out keycode-vscode-0.1.0.vsix
+npx @vscode/vsce package --out keycode-vscode-0.1.1.vsix
 ```
 
 Attach the VSIX to the GitHub release and add its checksum:

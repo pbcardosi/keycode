@@ -53,3 +53,7 @@ npm-debug.log*
 
 # VS Code extension packages
 *.vsix
+
+# Local release staging
+/release/
+

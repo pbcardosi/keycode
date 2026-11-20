@@ -8,6 +8,7 @@ import {
 import { createAgentSetup } from "../../dist/app/factory.js";
 import { executeCommand } from "../../dist/app/commands.js";
 import { makeHome, makeWorkspace } from "../helpers.js";
+import { VERSION } from "../../dist/version.js";
 
 describe("T-U6: onboarding and help", () => {
   it("shows onboarding on a fresh home, lists commands, and renders release notes", async () => {
@@ -39,7 +40,7 @@ describe("T-U6: onboarding and help", () => {
       out: (line) => notes.push(line),
       signal: new AbortController().signal,
     });
-    expect(notes.join("\n")).toContain("KeyCode 0.1.0");
+    expect(notes.join("\n")).toContain(`KeyCode ${VERSION}`);
     expect(releaseNotes()).toContain("Part 1");
   });
 });

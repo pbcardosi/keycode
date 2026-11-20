@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -56,7 +56,13 @@ export function makeWorkspace(name = "ws"): string {
 }
 
 export function projectKey(cwd: string): string {
-  return createHash("sha256").update(resolve(cwd)).digest("hex").slice(0, 12);
+  let canonical = resolve(cwd);
+  try {
+    canonical = realpathSync(canonical);
+  } catch {
+    // Fall back to the lexical path when the directory does not exist yet.
+  }
+  return createHash("sha256").update(canonical).digest("hex").slice(0, 12);
 }
 
 export function readJsonl(path: string): unknown[] {
