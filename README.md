@@ -7,7 +7,7 @@ Code v2.1.322. It is not affiliated with Anthropic and does not require an
 Anthropic account.
 
 **Status:** working alpha. All 90 features have passing acceptance tests. Install
-from a local tarball or run from `dist/`; no registry package yet.
+from npm, Homebrew, the Windows portable build, or the VS Code Marketplace.
 
 ---
 
@@ -44,7 +44,10 @@ Alternatives:
   [releases page](https://github.com/pbcardosi/keycode/releases), unzip it, and
   run `keycode.exe`. The zip bundles Node.js and the CLI.
 - macOS and Linux: `brew tap pbcardosi/keycode && brew install keycode`.
-- VS Code: install `keycode-vscode-<version>.vsix` from the releases page.
+- VS Code: install the
+  [KeyCode extension](https://marketplace.visualstudio.com/items?itemName=keycode.keycode-vscode)
+  from the Marketplace, or install `keycode-vscode-<version>.vsix` from the
+  [releases page](https://github.com/pbcardosi/keycode/releases).
 
 ### From source
 

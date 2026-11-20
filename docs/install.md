@@ -78,7 +78,9 @@ keycode --version
 
 ## VS Code
 
-Download `keycode-vscode-<version>.vsix` from the releases page, or build it:
+Install the [KeyCode extension](https://marketplace.visualstudio.com/items?itemName=keycode.keycode-vscode)
+from the Visual Studio Marketplace. You can also download
+`keycode-vscode-<version>.vsix` from the releases page, or build it:
 
 ```powershell
 cd editors/vscode
@@ -86,8 +88,7 @@ npx @vscode/vsce package
 code --install-extension keycode-vscode-<version>.vsix --force
 ```
 
-The extension is not yet on the Visual Studio Marketplace. Compare the VSIX
-against `SHA256SUMS` when installing a downloaded copy.
+Compare a downloaded VSIX against `SHA256SUMS`.
 
 ## First run
 
