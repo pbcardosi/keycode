@@ -263,9 +263,20 @@ export function TuiApp({ setup, permissions, onClear }: TuiAppProps): React.Reac
 
   return (
     <Box flexDirection="column">
+      <Box marginBottom={1}>
+        <Text color="cyan" bold>
+          keycode
+        </Text>
+        <Text dimColor>
+          {" · "}
+          {setup.providerId}/{agent.model}
+          {" · "}
+          {setup.sessionId.slice(0, 8)}
+        </Text>
+      </Box>
       <Box flexDirection="column" flexGrow={1}>
         {messages.length === 0 && streamText.length === 0 && (
-          <Text dimColor>keycode — type a prompt and press Enter.</Text>
+          <Text dimColor>Type a prompt on the line below, then press Enter. Esc exits.</Text>
         )}
         {messages.map((message, index) => {
           const text = messageText(message);
