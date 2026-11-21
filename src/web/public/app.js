@@ -693,8 +693,11 @@ function applyTerminalRunning(value) {
 }
 
 function terminalWrite(text) {
-  // Strip ANSI escapes; the panel renders plain UTF-8 text.
-  const clean = String(text).replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "");
+  // Strip ANSI control sequences; the panel renders plain UTF-8 text.
+  const clean = String(text)
+    .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, "")
+    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "");
   if (clean.length === 0) return;
   const nearBottom =
     terminalOutput.scrollTop + terminalOutput.clientHeight >= terminalOutput.scrollHeight - 24;
