@@ -4,6 +4,25 @@ All notable changes are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning.
 
+## [0.1.3] - 2026-11-21
+
+Provider management release.
+
+### Added
+
+- Provider manager in `keycode remote`: browse providers, switch models, save
+  and remove API keys, see the key source and fingerprint, and handle local
+  providers without keys.
+- WebSocket messages for provider status, provider key save, and provider key
+  removal.
+- `scripts/extract-trace.mjs` and the neon dashboard prototype under
+  `prototype/`, including a real session trace mode.
+
+### Changed
+
+- Static web assets are served with `cache-control: no-store` and versioned
+  URLs so a running server picks up UI updates.
+
 ## [0.1.2] - 2026-11-20
 
 Packaging and distribution release.
