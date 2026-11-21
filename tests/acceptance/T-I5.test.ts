@@ -541,4 +541,87 @@ describe("T-I5: Remote Control", () => {
     client.close();
     await server.close();
   });
+
+  it("runs console commands through the authenticated socket with limits", async () => {
+    let hanging = false;
+    const server = await startRemoteControl({
+      token: "pair-token",
+      handler: {
+        onPrompt: async () => "ok",
+        startTerminal: (command, sink) => {
+          sink.setCancel(() => sink.exit({ code: 130, durationMs: 3 }));
+          sink.start({ shell: "test-shell", cwd: "/workspace" });
+          if (command === "hang") {
+            hanging = true;
+            return;
+          }
+          sink.output("stdout", `ran ${command}\n`);
+          sink.exit({ code: 0, durationMs: 5 });
+        },
+      },
+    });
+
+    const port = Number(new URL(server.url).port);
+    const client = await connectWebSocket(port, "/?token=pair-token");
+    const hello = (await nextOfType(client, "hello")) as {
+      terminal: { enabled: boolean; running: unknown };
+    };
+    expect(hello.terminal).toEqual({ enabled: true, running: null });
+
+    client.send(JSON.stringify({ type: "terminal_run", id: "run-1", command: "echo hi" }));
+    const start = (await nextOfType(client, "terminal_start")) as {
+      id: string;
+      command: string;
+      shell: string;
+      cwd: string;
+    };
+    expect(start).toMatchObject({
+      id: "run-1",
+      command: "echo hi",
+      shell: "test-shell",
+      cwd: "/workspace",
+    });
+    const output = (await nextOfType(client, "terminal_output")) as {
+      id: string;
+      stream: string;
+      text: string;
+    };
+    expect(output).toMatchObject({ id: "run-1", stream: "stdout", text: "ran echo hi\n" });
+    const exit = (await nextOfType(client, "terminal_exit")) as {
+      id: string;
+      code: number | null;
+      truncated: boolean;
+    };
+    expect(exit).toMatchObject({ id: "run-1", code: 0, truncated: false });
+
+    client.send(JSON.stringify({ type: "terminal_run", id: "run-2", command: "   " }));
+    const empty = (await nextOfType(client, "terminal_error")) as { id: string; message: string };
+    expect(empty.id).toBe("run-2");
+    expect(empty.message).toBe("Enter a command.");
+
+    client.send(JSON.stringify({ type: "terminal_run", id: "run-3", command: "x".repeat(8001) }));
+    const oversized = (await nextOfType(client, "terminal_error")) as { id: string; message: string };
+    expect(oversized.id).toBe("run-3");
+    expect(oversized.message).toContain("limited");
+
+    client.send(JSON.stringify({ type: "terminal_run", id: "run-4", command: "hang" }));
+    await nextOfType(client, "terminal_start");
+    expect(hanging).toBe(true);
+    client.send(JSON.stringify({ type: "terminal_run", id: "run-5", command: "echo again" }));
+    const busy = (await nextOfType(client, "terminal_error")) as { message: string };
+    expect(busy.message).toBe("A command is already running.");
+
+    client.send(JSON.stringify({ type: "terminal_cancel", id: "run-4" }));
+    const cancelled = (await nextOfType(client, "terminal_exit")) as {
+      id: string;
+      code: number | null;
+      cancelled?: boolean;
+    };
+    expect(cancelled.id).toBe("run-4");
+    expect(cancelled.code).toBe(130);
+    expect(cancelled.cancelled).toBe(true);
+
+    client.close();
+    await server.close();
+  });
 });

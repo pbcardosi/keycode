@@ -117,6 +117,7 @@ export interface AgentSetup {
   warnings: string[];
   home: string;
   permissionMode: PermissionMode;
+  permissions: PermissionService;
   checkpoints: CheckpointStore;
   toolNames: string[];
   commands: CommandDefinition[];
@@ -799,6 +800,7 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     warnings,
     home,
     permissionMode: mode,
+    permissions: permissionService,
     checkpoints,
     toolNames: tools.map((tool) => tool.name),
     commands,

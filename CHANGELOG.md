@@ -4,6 +4,16 @@ All notable changes are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning.
 
+## [Unreleased]
+
+### Added
+
+- Command console in `keycode remote`: a Terminal chip opens a panel that runs
+  one workspace command at a time through the Bash tool, with the same
+  permission approvals, sandbox checks, audit entries, output caps, and cancel
+  behavior. It reports start, output, and exit over the authenticated
+  WebSocket and keeps the command out of the session transcript.
+
 ## [0.1.4] - 2026-11-21
 
 ### Added

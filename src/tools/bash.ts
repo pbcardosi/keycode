@@ -27,7 +27,10 @@ export interface CommandResult {
   exitCode: number | null;
   timedOut: boolean;
   durationMs: number;
+  truncated: boolean;
 }
+
+export type CommandStream = "stdout" | "stderr";
 
 function killTree(pid: number): void {
   if (process.platform === "win32") {
@@ -54,9 +57,12 @@ export async function runCommand(options: {
   signal?: AbortSignal | undefined;
   shell?: boolean | undefined;
   args?: string[] | undefined;
+  onChunk?: ((stream: CommandStream, text: string) => void) | undefined;
+  maxOutputBytes?: number | undefined;
 }): Promise<CommandResult> {
   const started = Date.now();
   const timeoutMs = options.timeoutMs ?? 120_000;
+  const maxOutputBytes = options.maxOutputBytes ?? 2_000_000;
 
   return await new Promise((resolvePromise) => {
     const child = spawn(options.command, options.args ?? [], {
@@ -70,15 +76,44 @@ export async function runCommand(options: {
 
     let stdout = "";
     let stderr = "";
+    const bytes: Record<CommandStream, number> = { stdout: 0, stderr: 0 };
+    let truncated = false;
     let timedOut = false;
     let settled = false;
+
+    const collect = (stream: CommandStream, chunk: Buffer): void => {
+      if (bytes[stream] >= maxOutputBytes) {
+        truncated = true;
+        return;
+      }
+      const remaining = maxOutputBytes - bytes[stream];
+      const slice = chunk.length > remaining ? chunk.subarray(0, remaining) : chunk;
+      if (slice.length < chunk.length) truncated = true;
+      const text = slice.toString("utf8");
+      if (stream === "stdout") stdout += text;
+      else stderr += text;
+      bytes[stream] += slice.length;
+      if (text.length === 0) return;
+      try {
+        options.onChunk?.(stream, text);
+      } catch {
+        // Stream consumers must not break the command.
+      }
+    };
 
     const finish = (exitCode: number | null): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       options.signal?.removeEventListener("abort", onAbort);
-      resolvePromise({ stdout, stderr, exitCode, timedOut, durationMs: Date.now() - started });
+      resolvePromise({
+        stdout,
+        stderr,
+        exitCode,
+        timedOut,
+        durationMs: Date.now() - started,
+        truncated,
+      });
     };
 
     const onAbort = (): void => {
@@ -91,12 +126,8 @@ export async function runCommand(options: {
       if (child.pid) killTree(child.pid);
     }, timeoutMs);
 
-    child.stdout?.on("data", (chunk: Buffer) => {
-      if (stdout.length < 2_000_000) stdout += chunk.toString("utf8");
-    });
-    child.stderr?.on("data", (chunk: Buffer) => {
-      if (stderr.length < 2_000_000) stderr += chunk.toString("utf8");
-    });
+    child.stdout?.on("data", (chunk: Buffer) => collect("stdout", chunk));
+    child.stderr?.on("data", (chunk: Buffer) => collect("stderr", chunk));
     child.on("error", (error) => {
       stderr += `${stderr.length > 0 ? "\n" : ""}${error.message}`;
       finish(null);

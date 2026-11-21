@@ -192,6 +192,9 @@ Open the printed URL. The interface supports:
   local/free flags,
 - Settings tab for permission mode, Chat/Dashboard view, and dashboard
   animation, plus the current model, session ID, and status,
+- command console: a Terminal chip runs one workspace command at a time with
+  the same approvals and sandbox, streams output, and can cancel it. There is
+  no TTY, so interactive prompts and full-screen programs are not supported,
 - optional live dashboard: an execution field, event stream, provider and usage
   rails, and the chat in one shell; Chat stays the default view,
 - session metadata under the composer,

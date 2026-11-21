@@ -191,7 +191,20 @@ export async function connectWebSocket(port: number, path = "/"): Promise<WsTest
     send(text: string): void {
       const payload = Buffer.from(text, "utf8");
       const mask = randomBytes(4);
-      const header = Buffer.from([0x81, 0x80 | payload.length]);
+      let header: Buffer;
+      if (payload.length < 126) {
+        header = Buffer.from([0x81, 0x80 | payload.length]);
+      } else if (payload.length < 65_536) {
+        header = Buffer.alloc(4);
+        header[0] = 0x81;
+        header[1] = 0x80 | 126;
+        header.writeUInt16BE(payload.length, 2);
+      } else {
+        header = Buffer.alloc(10);
+        header[0] = 0x81;
+        header[1] = 0x80 | 127;
+        header.writeBigUInt64BE(BigInt(payload.length), 2);
+      }
       const masked = Buffer.from(payload.map((byte, index) => byte ^ (mask[index % 4] ?? 0)));
       socket.write(Buffer.concat([header, mask, masked]));
     },
