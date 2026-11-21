@@ -33,7 +33,7 @@ const seed = [
   { kind: "Read", title: "src/contracts/permissions.ts", meta: "14 ms" },
   { kind: "Edit", title: "src/contracts/permissions.ts", meta: "+6 −2" },
   { kind: "Test", title: "T-S3 permission dialog", meta: "passed" },
-  { kind: "Approval", title: "Allow Bash(npm run verify)", meta: "allowed once" },
+  { kind: "Approval", title: "Allow Bash(npm run verify)", meta: "allowed" },
   { kind: "Shell", title: "npm run verify", meta: "18.2 s" },
   { kind: "Read", title: "src/web/public/index.html", meta: "11 ms" },
   { kind: "Edit", title: "src/web/public/index.html", meta: "+86 −12" },

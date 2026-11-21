@@ -493,14 +493,32 @@ body {
 }
 
 .top-row .stream .panel-head {
-  flex-direction: column;
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "title state"
+    "filters filters";
+  align-items: start;
   gap: var(--space-xs);
 }
 
+.top-row .stream .panel-heading {
+  grid-area: title;
+}
+
 .top-row .stream .panel-tools {
-  width: 100%;
-  justify-content: space-between;
+  display: contents;
+}
+
+.top-row .stream .segmented {
+  grid-area: filters;
+  justify-self: start;
+}
+
+.top-row .stream .state-select {
+  grid-area: state;
+  align-self: start;
+  justify-self: end;
 }
 
 .top-row .event {
@@ -829,7 +847,10 @@ body {
 }
 
 .event-meta {
+  overflow: hidden;
   text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .event[data-status="error"] .event-meta {
