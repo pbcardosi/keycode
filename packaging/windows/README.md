@@ -6,7 +6,7 @@ a small launcher. It targets Windows 10 or later on x64.
 Build steps (PowerShell, from the repository root):
 
 ```powershell
-$version = "0.1.2"
+$version = "0.1.3"
 $stage = Join-Path $env:TEMP "keycode-portable"
 $tgz = (Resolve-Path "release\keycode-ai-$version.tgz").Path
 
