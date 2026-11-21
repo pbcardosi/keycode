@@ -185,6 +185,16 @@ Open the printed URL. The interface supports:
 - session list, new session, resume with history, rename, fork, and delete,
 - artifact panel with versioned HTML previews rendered inside the UI,
 - provider/model switching that keeps the current session,
+- provider manager for saving and removing API keys, with the key source and
+  fingerprint shown; local providers work without a key,
+- custom providers for future endpoints: OpenAI-compatible or Anthropic,
+  custom ID and name, model list, default model, environment variable, and
+  local/free flags,
+- Settings tab for permission mode, Chat/Dashboard view, and dashboard
+  animation, plus the current model, session ID, and status,
+- optional live dashboard: an execution field, event stream, provider and usage
+  rails, and the chat in one shell; Chat stays the default view,
+- session metadata under the composer,
 - editor context from the VS Code extension: active file and selection shown
   above the composer and attached to prompts; **Detach** clears it,
 - stop and reconnect,

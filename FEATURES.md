@@ -239,7 +239,32 @@ keycode --provider ollama --model gemma4:e2b
 }
 ```
 
-### 8.6 Key handling rules
+### 8.6 Custom providers
+
+The web UI can add a provider that is not in the built-in list. It writes the
+provider entry to `~/.keycode/settings.json` with:
+
+```json
+{
+  "providers": {
+    "my-endpoint": {
+      "kind": "openai-compatible",
+      "displayName": "My Endpoint",
+      "baseUrl": "https://example.test/v1",
+      "apiKeyEnv": "MY_ENDPOINT_API_KEY",
+      "models": ["my-model"],
+      "defaultModel": "my-model",
+      "free": true,
+      "local": false
+    }
+  }
+}
+```
+
+`kind` is `openai-compatible` or `anthropic`. An API key typed into the form is
+stored in the local credentials file, never in `settings.json`.
+
+### 8.7 Key handling rules
 
 - Prefer the OS keychain via `keycode auth set <provider>`.
 - Environment variables override config.
