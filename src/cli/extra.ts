@@ -1,10 +1,10 @@
 import { Command } from "commander";
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { stdout } from "node:process";
-import type { PermissionMode } from "../contracts/permissions.js";
+import { PERMISSION_MODES, type PermissionMode } from "../contracts/permissions.js";
 import type { ToolContext } from "../contracts/tool.js";
 import { createAgentSetup, type AgentSetupOptions } from "../app/factory.js";
 import { trustWorkspace, untrustWorkspace } from "../app/trust.js";
@@ -15,6 +15,8 @@ import {
   setStoredCredential,
 } from "../providers/credentials.js";
 import { canonicalProviderId } from "../providers/registry.js";
+import { ProviderConfigSchema } from "../storage/schema.js";
+import { atomicWrite } from "../util/fsx.js";
 import { fingerprint } from "../util/ids.js";
 import { keycodeHome, projectDir } from "../util/paths.js";
 import { silentLogger } from "../util/logger.js";
@@ -424,11 +426,12 @@ export function registerExtraCommands(program: Command): void {
       let currentProvider =
         typeof options.provider === "string" ? options.provider : undefined;
       let currentModel = typeof options.model === "string" ? options.model : undefined;
+      let currentPermissionMode = options.permissionMode as PermissionMode;
       const buildOptions = (overrides: Partial<AgentSetupOptions> = {}): AgentSetupOptions => ({
         cwd: process.cwd(),
         ...(currentProvider === undefined ? {} : { provider: currentProvider }),
         ...(currentModel === undefined ? {} : { model: currentModel }),
-        permissionMode: options.permissionMode as PermissionMode,
+        permissionMode: currentPermissionMode,
         prompter: broker,
         askQuestions: (items) => questions.ask(items),
         ...overrides,
@@ -471,6 +474,7 @@ export function registerExtraCommands(program: Command): void {
         setup = await createAgentSetup(buildOptions(overrides));
         currentProvider = setup.providerId;
         currentModel = setup.model;
+        currentPermissionMode = setup.permissionMode;
         unsubscribeAgent = setup.agent.subscribe(dispatch);
         controller = new AbortController();
         return describe(setup);
@@ -490,14 +494,14 @@ export function registerExtraCommands(program: Command): void {
           const config = custom[id];
           return {
             id,
-            name: preset?.displayName ?? id,
+            name: preset?.displayName ?? config?.displayName ?? id,
             models: preset?.models ?? config?.models ?? (id === currentProvider && currentModel ? [currentModel] : []),
             defaultModel:
               preset?.defaultModel ??
               config?.defaultModel ??
               (id === currentProvider ? (currentModel ?? "") : ""),
-            free: preset?.free ?? true,
-            local: preset?.local ?? (id === "fake" || id === currentProvider),
+            free: preset?.free ?? config?.free ?? true,
+            local: preset?.local ?? config?.local ?? id === "fake",
           };
         });
       };
@@ -508,10 +512,8 @@ export function registerExtraCommands(program: Command): void {
           const preset = PRESETS[provider.id];
           const config = custom[provider.id];
           const stored = credentialStatus(setup.home, provider.id);
-          const envKey =
-            preset?.apiKeyEnv === null || preset?.apiKeyEnv === undefined
-              ? undefined
-              : process.env[preset.apiKeyEnv];
+          const apiKeyEnv = preset?.apiKeyEnv ?? config?.apiKeyEnv ?? null;
+          const envKey = apiKeyEnv === null ? undefined : process.env[apiKeyEnv];
           const source: RemoteProviderStatus["source"] = provider.local
             ? null
             : envKey !== undefined && envKey.length > 0
@@ -532,7 +534,7 @@ export function registerExtraCommands(program: Command): void {
             source,
             fingerprint:
               stored.fingerprint ?? (visibleKey === null ? null : fingerprint(visibleKey)),
-            apiKeyEnv: preset?.apiKeyEnv ?? null,
+            apiKeyEnv,
             current: provider.id === setup.providerId,
           };
         });
@@ -556,6 +558,108 @@ export function registerExtraCommands(program: Command): void {
 
       const providerStatusesAfterRemove = (provider: string): RemoteProviderStatus[] => {
         removeStoredCredential(setup.home, canonicalProviderId(provider));
+        return providerStatuses();
+      };
+
+      const addProviderConfig = (
+        provider: string,
+        config: Record<string, unknown>,
+        key?: string | undefined,
+      ): RemoteProviderStatus[] => {
+        const id = canonicalProviderId(provider);
+        if (!/^[a-z0-9][a-z0-9-_]*$/.test(id)) {
+          throw new KeycodeError(
+            "CONFIG_INVALID",
+            "Provider id must start with a letter or digit and contain only letters, digits, dashes, or underscores.",
+          );
+        }
+        if (PRESETS[id] !== undefined || setup.settings.providers?.[id] !== undefined) {
+          throw new KeycodeError("CONFIG_INVALID", `Provider "${id}" already exists.`);
+        }
+        const parsed = ProviderConfigSchema.parse(config);
+        if (parsed.kind === "fake") {
+          throw new KeycodeError("CONFIG_INVALID", "The fake provider cannot be added from the UI.");
+        }
+        const kind: "openai-compatible" | "anthropic" =
+          parsed.kind === "anthropic" ? "anthropic" : "openai-compatible";
+        const baseUrl = typeof parsed.baseUrl === "string" ? parsed.baseUrl.trim() : "";
+        if (baseUrl.length === 0) {
+          throw new KeycodeError("CONFIG_INVALID", "Base URL is required.");
+        }
+        let url: URL;
+        try {
+          url = new URL(baseUrl);
+        } catch {
+          throw new KeycodeError("CONFIG_INVALID", "Base URL must be a valid URL.");
+        }
+        if (url.protocol !== "http:" && url.protocol !== "https:") {
+          throw new KeycodeError("CONFIG_INVALID", "Base URL must use http or https.");
+        }
+        const models = [
+          ...new Set(
+            (parsed.models ?? [])
+              .map((model) => model.trim())
+              .filter((model) => model.length > 0),
+          ),
+        ];
+        if (models.length === 0) {
+          throw new KeycodeError("CONFIG_INVALID", "At least one model is required.");
+        }
+        const requestedDefault =
+          typeof parsed.defaultModel === "string" ? parsed.defaultModel.trim() : "";
+        const defaultModel = requestedDefault.length > 0 ? requestedDefault : models[0] ?? "";
+        if (!models.includes(defaultModel)) models.unshift(defaultModel);
+        const nextConfig = {
+          kind,
+          displayName:
+            typeof parsed.displayName === "string" && parsed.displayName.trim().length > 0
+              ? parsed.displayName.trim()
+              : id,
+          baseUrl,
+          apiKeyEnv: parsed.apiKeyEnv ?? null,
+          models,
+          defaultModel,
+          ...(parsed.contextWindow === undefined ? {} : { contextWindow: parsed.contextWindow }),
+          ...(parsed.maxOutputTokens === undefined
+            ? {}
+            : { maxOutputTokens: parsed.maxOutputTokens }),
+          free: parsed.free ?? true,
+          local: parsed.local ?? false,
+          ...(parsed.capabilities === undefined ? {} : { capabilities: parsed.capabilities }),
+        };
+        const settingsPath = join(setup.home, "settings.json");
+        let raw: Record<string, unknown> = {};
+        if (existsSync(settingsPath)) {
+          try {
+            raw = JSON.parse(readFileSync(settingsPath, "utf8").replace(/^\uFEFF/, "")) as Record<
+              string,
+              unknown
+            >;
+          } catch {
+            throw new KeycodeError("CONFIG_INVALID", "settings.json is not valid JSON.");
+          }
+        }
+        const existingProviders =
+          raw.providers !== null &&
+          typeof raw.providers === "object" &&
+          !Array.isArray(raw.providers)
+            ? (raw.providers as Record<string, unknown>)
+            : {};
+        atomicWrite(
+          settingsPath,
+          `${JSON.stringify(
+            { ...raw, providers: { ...existingProviders, [id]: nextConfig } },
+            null,
+            2,
+          )}\n`,
+        );
+        setup.settings.providers = {
+          ...(setup.settings.providers ?? {}),
+          [id]: nextConfig,
+        };
+        if (key !== undefined && key.trim().length > 0) {
+          setStoredCredential(setup.home, id, key.trim());
+        }
         return providerStatuses();
       };
 
@@ -638,10 +742,23 @@ export function registerExtraCommands(program: Command): void {
           providerStatuses: () => providerStatuses(),
           setProviderKey: (provider, key) => providerStatusesAfterKey(provider, key),
           removeProviderKey: (provider) => providerStatusesAfterRemove(provider),
+          addProvider: (provider, config, key) => addProviderConfig(provider, config, key),
           setModel: async (provider, model) => {
             const sessionId = setup.sessionId;
             setup.store.setModel(sessionId, provider, model);
             return activate({ resume: sessionId, provider, model });
+          },
+          setPermissionMode: async (mode) => {
+            if (!(PERMISSION_MODES as readonly string[]).includes(mode)) {
+              throw new KeycodeError("CONFIG_INVALID", `Unknown permission mode "${mode}".`);
+            }
+            const sessionId = setup.sessionId;
+            return activate({
+              resume: sessionId,
+              provider: setup.providerId,
+              model: setup.model,
+              permissionMode: mode as PermissionMode,
+            });
           },
           renameSession: (id, name) => {
             setup.store.rename(id, name.trim().length === 0 ? id.slice(0, 8) : name.trim());

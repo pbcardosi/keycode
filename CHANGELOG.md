@@ -11,10 +11,16 @@ semantic versioning.
 - Optional live dashboard view in `keycode remote`: an execution field,
   event stream, provider and usage rails, and the real chat in one shell.
   The default chat view remains available from the same toggle.
+- Provider manager can add future providers: OpenAI-compatible or Anthropic
+  endpoints, custom IDs and names, model lists, default models, environment
+  variable names, local/free flags, and a local API key.
+- Settings tab for permission mode, Chat/Dashboard view, dashboard animation,
+  current model, session ID, and status.
 
 ### Changed
 
 - Session metadata now sits under the composer instead of the topbar.
+- Custom provider configs can carry a display name plus free/local flags.
 
 ## [0.1.3] - 2026-11-21
 

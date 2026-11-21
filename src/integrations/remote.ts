@@ -101,6 +101,7 @@ export interface RemoteHandler {
   resume?: ((id: string | null) => Promise<RemoteInfo> | RemoteInfo) | undefined;
   catalog?: (() => Promise<RemoteProvider[]> | RemoteProvider[]) | undefined;
   setModel?: ((provider: string, model: string) => Promise<RemoteInfo> | RemoteInfo) | undefined;
+  setPermissionMode?: ((mode: string) => Promise<RemoteInfo> | RemoteInfo) | undefined;
   renameSession?:
     | ((id: string, name: string) => Promise<RemoteSession[]> | RemoteSession[])
     | undefined;
@@ -120,6 +121,13 @@ export interface RemoteHandler {
     | undefined;
   removeProviderKey?:
     | ((provider: string) => Promise<RemoteProviderStatus[]> | RemoteProviderStatus[])
+    | undefined;
+  addProvider?:
+    | ((
+        provider: string,
+        config: Record<string, unknown>,
+        key?: string | undefined,
+      ) => Promise<RemoteProviderStatus[]> | RemoteProviderStatus[])
     | undefined;
 }
 
@@ -511,12 +519,14 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         name?: string;
         provider?: string;
         model?: string;
+        mode?: string;
         key?: string;
         choice?: string;
         selection?: unknown;
         answers?: unknown;
         cancelled?: boolean;
         accept?: boolean;
+        config?: unknown;
       };
       try {
         message = JSON.parse(text) as typeof message;
@@ -803,6 +813,75 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
                 message: (error as Error).message || "removing the provider key failed",
               }),
             );
+          }
+        })();
+        return;
+      }
+
+      if (
+        message.type === "provider_add" &&
+        typeof message.provider === "string" &&
+        message.config !== null &&
+        typeof message.config === "object" &&
+        !Array.isArray(message.config)
+      ) {
+        if (options.handler.addProvider === undefined) {
+          connection.send(
+            JSON.stringify({ type: "error", message: "adding providers is not available" }),
+          );
+          return;
+        }
+        void (async () => {
+          try {
+            const key =
+              typeof message.key === "string" && message.key.length > 0
+                ? message.key
+                : undefined;
+            const next = await options.handler.addProvider?.(
+              message.provider ?? "",
+              message.config as Record<string, unknown>,
+              key,
+            );
+            if (next !== undefined) broadcast({ type: "providers", providers: next });
+            else broadcast({ type: "providers", providers: await providerStatuses() });
+          } catch (error) {
+            connection.send(
+              JSON.stringify({
+                type: "error",
+                message: (error as Error).message || "adding the provider failed",
+              }),
+            );
+          }
+        })();
+        return;
+      }
+
+      if (message.type === "permission_mode" && typeof message.mode === "string") {
+        if (options.handler.setPermissionMode === undefined) {
+          connection.send(
+            JSON.stringify({ type: "error", message: "permission mode switching is not available" }),
+          );
+          return;
+        }
+        if (busy) {
+          connection.send(JSON.stringify({ type: "error", message: "Stop the current turn first" }));
+          return;
+        }
+        setBusy(true);
+        void (async () => {
+          try {
+            const next =
+              (await options.handler.setPermissionMode?.(message.mode ?? "")) ?? info();
+            broadcast({ type: "model_changed", info: next });
+          } catch (error) {
+            connection.send(
+              JSON.stringify({
+                type: "error",
+                message: (error as Error).message || "permission mode switch failed",
+              }),
+            );
+          } finally {
+            setBusy(false);
           }
         })();
         return;

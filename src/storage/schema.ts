@@ -4,6 +4,7 @@ import { PERMISSION_MODES } from "../contracts/permissions.js";
 export const ProviderConfigSchema = z
   .object({
     kind: z.enum(["openai-compatible", "anthropic", "fake"]).optional(),
+    displayName: z.string().optional(),
     baseUrl: z.string().optional(),
     apiKeyEnv: z.string().nullable().optional(),
     apiKey: z.string().optional(),
@@ -14,6 +15,8 @@ export const ProviderConfigSchema = z
     defaultModel: z.string().optional(),
     contextWindow: z.number().int().positive().optional(),
     maxOutputTokens: z.number().int().positive().optional(),
+    free: z.boolean().optional(),
+    local: z.boolean().optional(),
     capabilities: z
       .object({
         streaming: z.boolean().optional(),

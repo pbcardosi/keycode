@@ -31,7 +31,21 @@ const dashChat = $("dash-chat");
 const dashSessions = $("dash-sessions");
 const dashNew = $("dash-new");
 const dashProviders = $("dash-providers");
+const dashSettings = $("dash-settings");
 const dashArtifacts = $("dash-artifacts");
+const settingsButton = $("settings-button");
+const settingsModal = $("settings-modal");
+const settingsClose = $("settings-close");
+const settingsModel = $("settings-model");
+const settingsManageProviders = $("settings-manage-providers");
+const settingsPermission = $("settings-permission");
+const settingsPermissionHint = $("settings-permission-hint");
+const settingsError = $("settings-error");
+const settingsChat = $("settings-chat");
+const settingsDashboard = $("settings-dashboard");
+const settingsMotion = $("settings-motion");
+const settingsSession = $("settings-session");
+const settingsState = $("settings-state");
 const input = $("input");
 const sendButton = $("send");
 const stopButton = $("stop");
@@ -78,6 +92,21 @@ const providerKeyRemove = $("provider-key-remove");
 const providerError = $("provider-error");
 const providerRefresh = $("provider-refresh");
 const providerSwitch = $("provider-switch");
+const providerAdd = $("provider-add");
+const providerAddModal = $("provider-add-modal");
+const providerAddForm = $("provider-add-form");
+const providerAddCancel = $("provider-add-cancel");
+const providerAddId = $("provider-add-id");
+const providerAddName = $("provider-add-name");
+const providerAddKind = $("provider-add-kind");
+const providerAddUrl = $("provider-add-url");
+const providerAddModels = $("provider-add-models");
+const providerAddDefault = $("provider-add-default");
+const providerAddEnv = $("provider-add-env");
+const providerAddKey = $("provider-add-key");
+const providerAddLocal = $("provider-add-local");
+const providerAddFree = $("provider-add-free");
+const providerAddError = $("provider-add-error");
 $("provider-close").addEventListener("click", closeProviders);
 const sessionFormModal = $("session-form-modal");
 const sessionForm = $("session-form");
@@ -97,6 +126,7 @@ let currentModel = "";
 let providerStatuses = [];
 let selectedProviderId = "";
 let providerKeyRequest = false;
+let pendingProviderAdd = "";
 let currentPermissionMode = "";
 let dashboardOpen = false;
 let dashboardUsage = null;
@@ -105,6 +135,7 @@ let dashCtx = null;
 let dashSize = { width: 0, height: 0 };
 let dashRaf = 0;
 const dashReduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+let dashMotionEnabled = !dashReduceMotion;
 let sessions = [];
 let pendingSessionAction = null;
 let currentQuestion = null;
@@ -236,6 +267,7 @@ function renderMeta(info) {
   currentModel = info.model ?? currentModel;
   currentPermissionMode = info.permissionMode ?? currentPermissionMode;
   if (dashboardOpen) renderDashboard();
+  if (settingsModal !== null && !settingsModal.hidden) renderSettings();
 }
 
 const dashNumberFormat = new Intl.NumberFormat("en-US");
@@ -367,6 +399,7 @@ function updateDashStatus() {
   dashStatus.textContent = statusEl.textContent || "offline";
   dashStatus.dataset.state = statusEl.dataset.state || "offline";
   if (dashState !== null) dashState.textContent = statusEl.textContent || "offline";
+  if (settingsState !== null) settingsState.textContent = statusEl.textContent || "offline";
 }
 
 function dashEventRow(item) {
@@ -574,7 +607,7 @@ function stopDashLoop() {
 function startDashLoop() {
   stopDashLoop();
   if (!dashboardOpen) return;
-  if (dashReduceMotion) {
+  if (!dashMotionEnabled) {
     drawDash(performance.now());
     return;
   }
@@ -608,6 +641,7 @@ function setDashboard(open) {
     dashboardButton.textContent = "Dashboard";
     input.focus();
   }
+  if (settingsModal !== null && !settingsModal.hidden) renderSettings();
 }
 
 function initDashboard() {
@@ -623,12 +657,105 @@ function initDashboard() {
   });
 }
 
+const permissionHints = {
+  manual: "Ask before writes, shell commands, and network access.",
+  acceptEdits: "Accept file edits; still ask for shell and network.",
+  plan: "Read-only planning; edits and execution are blocked.",
+  auto: "Approve safe actions automatically; ask for risky ones.",
+  dontAsk: "Deny anything that would require approval.",
+  bypassPermissions: "Skip permission prompts. Use only in a trusted workspace.",
+};
+
+function permissionHint(mode) {
+  return permissionHints[mode] ?? permissionHints.manual;
+}
+
+function hideSettingsError() {
+  settingsError.hidden = true;
+  settingsError.textContent = "";
+}
+
+function showSettingsError(message) {
+  settingsError.textContent = message;
+  settingsError.hidden = false;
+}
+
+function renderSettings() {
+  if (settingsModal === null) return;
+  const model =
+    currentProvider.length > 0 || currentModel.length > 0
+      ? `${currentProvider || "-"} · ${currentModel || "-"}`
+      : "-";
+  settingsModel.textContent = model;
+  const mode = currentPermissionMode.length > 0 ? currentPermissionMode : "manual";
+  settingsPermission.value = mode;
+  settingsPermissionHint.textContent = permissionHint(mode);
+  settingsChat.classList.toggle("is-active", !dashboardOpen);
+  settingsDashboard.classList.toggle("is-active", dashboardOpen);
+  settingsChat.setAttribute("aria-pressed", String(!dashboardOpen));
+  settingsDashboard.setAttribute("aria-pressed", String(dashboardOpen));
+  settingsMotion.checked = dashMotionEnabled;
+  settingsSession.textContent = currentSessionId.length > 0 ? currentSessionId.slice(0, 8) : "-";
+  settingsState.textContent = statusEl.textContent || "-";
+}
+
+function openSettings() {
+  settingsModal.hidden = false;
+  hideSettingsError();
+  renderSettings();
+  settingsClose.focus();
+}
+
+function closeSettings() {
+  settingsModal.hidden = true;
+  hideSettingsError();
+}
+
 dashboardButton.addEventListener("click", () => setDashboard(!dashboardOpen));
 dashChat.addEventListener("click", () => setDashboard(false));
 dashSessions.addEventListener("click", () => sessionsButton.click());
 dashNew.addEventListener("click", () => newSessionButton.click());
 dashProviders.addEventListener("click", () => providersButton.click());
 dashArtifacts.addEventListener("click", () => $("artifacts-button").click());
+dashSettings.addEventListener("click", openSettings);
+settingsButton.addEventListener("click", openSettings);
+settingsClose.addEventListener("click", closeSettings);
+settingsModal.addEventListener("click", (event) => {
+  if (event.target === settingsModal) closeSettings();
+});
+settingsManageProviders.addEventListener("click", () => {
+  closeSettings();
+  providersButton.click();
+});
+settingsChat.addEventListener("click", () => {
+  closeSettings();
+  setDashboard(false);
+});
+settingsDashboard.addEventListener("click", () => {
+  closeSettings();
+  setDashboard(true);
+});
+settingsMotion.addEventListener("change", () => {
+  dashMotionEnabled = settingsMotion.checked;
+  if (dashboardOpen) {
+    if (dashMotionEnabled) startDashLoop();
+    else {
+      stopDashLoop();
+      drawDash(performance.now());
+    }
+  }
+});
+settingsPermission.addEventListener("change", () => {
+  const mode = settingsPermission.value;
+  settingsPermissionHint.textContent = permissionHint(mode);
+  if (socket === null || socket.readyState !== WebSocket.OPEN) {
+    showSettingsError("Not connected to KeyCode.");
+    renderSettings();
+    return;
+  }
+  hideSettingsError();
+  send({ type: "permission_mode", mode });
+});
 
 function renderContext(context) {
   if (!context || typeof context.file !== "string" || context.file.length === 0) {
@@ -1296,6 +1423,116 @@ function closeProviders() {
   hideProviderError();
 }
 
+function showProviderAddError(message) {
+  providerAddError.textContent = message;
+  providerAddError.hidden = false;
+}
+
+function hideProviderAddError() {
+  providerAddError.hidden = true;
+  providerAddError.textContent = "";
+}
+
+function openAddProvider() {
+  providerModal.hidden = true;
+  providerAddModal.hidden = false;
+  providerAddForm.reset();
+  providerAddKey.disabled = false;
+  hideProviderAddError();
+  providerAddId.focus();
+}
+
+function closeAddProvider(reopen = true) {
+  providerAddModal.hidden = true;
+  providerAddKey.value = "";
+  hideProviderAddError();
+  if (reopen) openProviders();
+}
+
+function submitAddProvider() {
+  const id = providerAddId.value.trim().toLowerCase();
+  const name = providerAddName.value.trim();
+  const kind = providerAddKind.value === "anthropic" ? "anthropic" : "openai-compatible";
+  const baseUrl = providerAddUrl.value.trim();
+  const models = [
+    ...new Set(
+      providerAddModels.value
+        .split(/[\n,]/)
+        .map((model) => model.trim())
+        .filter((model) => model.length > 0),
+    ),
+  ];
+  const defaultModel = providerAddDefault.value.trim() || models[0] || "";
+  const apiKeyEnv = providerAddEnv.value.trim();
+  const key = providerAddKey.value.trim();
+
+  if (!/^[a-z0-9][a-z0-9-_]*$/.test(id)) {
+    showProviderAddError(
+      "Provider ID must start with a letter or digit and use letters, digits, dashes, or underscores.",
+    );
+    return;
+  }
+  if (baseUrl.length === 0) {
+    showProviderAddError("Base URL is required.");
+    return;
+  }
+  try {
+    const parsed = new URL(baseUrl);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      showProviderAddError("Base URL must use http or https.");
+      return;
+    }
+  } catch {
+    showProviderAddError("Base URL must be a valid URL.");
+    return;
+  }
+  if (models.length === 0) {
+    showProviderAddError("Add at least one model.");
+    return;
+  }
+  if (socket === null || socket.readyState !== WebSocket.OPEN) {
+    showProviderAddError("Not connected to KeyCode.");
+    return;
+  }
+
+  hideProviderAddError();
+  providerAddKey.value = "";
+  pendingProviderAdd = id;
+  providerAddModal.hidden = true;
+  providerModal.hidden = false;
+  providerStatus.textContent = "Adding provider...";
+  hideProviderError();
+  send({
+    type: "provider_add",
+    provider: id,
+    config: {
+      kind,
+      displayName: name.length > 0 ? name : id,
+      baseUrl,
+      models,
+      defaultModel,
+      apiKeyEnv: apiKeyEnv.length > 0 ? apiKeyEnv : null,
+      free: providerAddFree.checked,
+      local: providerAddLocal.checked,
+    },
+    ...(key.length > 0 ? { key } : {}),
+  });
+}
+
+providerAdd.addEventListener("click", openAddProvider);
+providerAddCancel.addEventListener("click", () => closeAddProvider(true));
+providerAddForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  submitAddProvider();
+});
+providerAddModal.addEventListener("click", (event) => {
+  if (event.target === providerAddModal) closeAddProvider(true);
+});
+providerAddLocal.addEventListener("change", () => {
+  providerAddKey.disabled = providerAddLocal.checked;
+  if (providerAddLocal.checked) providerAddKey.value = "";
+});
+
 function openSessionForm(action, session) {
   pendingSessionAction = { action, id: session.id };
   sessionFormTitle.textContent = action === "fork" ? "Fork session" : "Rename session";
@@ -1355,6 +1592,14 @@ function handleMessage(message) {
       providerKeyRequest = false;
       if (next.length === 0 && providerStatuses.length > 0) break;
       providerStatuses = next;
+      if (
+        pendingProviderAdd.length > 0 &&
+        providerStatuses.some((provider) => provider.id === pendingProviderAdd)
+      ) {
+        selectedProviderId = pendingProviderAdd;
+        pendingProviderAdd = "";
+        providerModel.dataset.provider = "";
+      }
       if (!providerModal.hidden) {
         if (!providerStatuses.some((provider) => provider.id === selectedProviderId)) {
           const target =
@@ -1394,10 +1639,18 @@ function handleMessage(message) {
       endTurn();
       break;
     case "error":
+      if (!providerAddModal.hidden) {
+        showProviderAddError(message.message ?? "Something went wrong.");
+      }
       if (!providerModal.hidden) {
         providerKeyRequest = false;
+        pendingProviderAdd = "";
         showProviderError(message.message ?? "Something went wrong.");
         updateProviderDetail();
+      }
+      if (!settingsModal.hidden) {
+        showSettingsError(message.message ?? "Something went wrong.");
+        renderSettings();
       }
       showError(message.message ?? "Something went wrong.");
       break;
@@ -1589,6 +1842,16 @@ providerSwitch.addEventListener("click", () => {
 });
 
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !settingsModal.hidden) {
+    event.preventDefault();
+    closeSettings();
+    return;
+  }
+  if (event.key === "Escape" && !providerAddModal.hidden) {
+    event.preventDefault();
+    closeAddProvider(true);
+    return;
+  }
   if (event.key === "Escape" && !providerModal.hidden) {
     event.preventDefault();
     closeProviders();
