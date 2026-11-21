@@ -1,6 +1,6 @@
 {
   "name": "keycode-ai",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": false,
   "type": "module",
   "description": "KeyCode — a free, local-first, bring-your-own-key coding agent.",
