@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#121212" />
     <title>KeyCode</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css?v=0.1.3" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.9" />
   </head>
   <body>
     <div class="app">
@@ -18,6 +18,7 @@
         <div class="session-actions">
           <button id="sessions-button" class="chip" type="button">Sessions</button>
           <button id="new-session" class="chip" type="button">New</button>
+          <button id="dashboard-button" class="chip" type="button">Dashboard</button>
           <button id="providers-button" class="chip" type="button">Providers</button>
           <button id="artifacts-button" class="chip" type="button">Artifacts</button>
         </div>
@@ -28,6 +29,100 @@
         <span class="trust-icon" aria-hidden="true">!</span>
         <span class="trust-label" id="trust-label"></span>
         <button id="trust-review" class="chip" type="button">Review</button>
+      </div>
+
+      <div class="dashboard" id="dashboard" hidden>
+        <aside class="dash-rail" aria-label="Dashboard navigation">
+          <div class="dash-session">
+            <span class="dash-label">Session</span>
+            <strong id="dash-session-name">Session overview</strong>
+            <span class="dash-id" id="dash-session-id"></span>
+          </div>
+          <nav class="dash-nav" aria-label="Dashboard sections">
+            <button type="button" class="dash-nav-item is-active" id="dash-overview">Overview</button>
+            <button type="button" class="dash-nav-item" id="dash-chat">Chat</button>
+            <button type="button" class="dash-nav-item" id="dash-sessions">Sessions</button>
+            <button type="button" class="dash-nav-item" id="dash-new">New session</button>
+            <button type="button" class="dash-nav-item" id="dash-providers">Providers</button>
+            <button type="button" class="dash-nav-item" id="dash-artifacts">Artifacts</button>
+          </nav>
+          <div class="dash-rail-foot">Neon dashboard</div>
+        </aside>
+
+        <section class="dash-center">
+          <header class="dash-head">
+            <div>
+              <h1 id="dash-title">Session overview</h1>
+              <p id="dash-sub">Local coding agent</p>
+            </div>
+            <span class="dash-chip" id="dash-status" data-state="offline">offline</span>
+          </header>
+
+          <div class="dash-row">
+            <section class="dash-panel dash-field" aria-labelledby="dash-field-title">
+              <header>
+                <h2 id="dash-field-title">Execution field</h2>
+                <span id="dash-field-hint">Tool calls</span>
+              </header>
+              <div class="dash-canvas-wrap" id="dash-canvas-wrap">
+                <canvas
+                  id="dash-canvas"
+                  role="img"
+                  aria-label="Live tool call activity field"
+                ></canvas>
+              </div>
+              <div class="dash-axis">
+                <span id="dash-axis-start">60s ago</span>
+                <span id="dash-axis-mid">30s</span>
+                <span>now</span>
+              </div>
+            </section>
+
+            <section class="dash-panel dash-stream" aria-labelledby="dash-stream-title">
+              <header>
+                <h2 id="dash-stream-title">Event stream</h2>
+                <span id="dash-event-count">0 events</span>
+              </header>
+              <ol class="dash-events" id="dash-events"></ol>
+            </section>
+          </div>
+
+          <section class="dash-panel dash-chat" aria-labelledby="dash-chat-title">
+            <header>
+              <h2 id="dash-chat-title">Chat</h2>
+              <span id="dash-chat-hint">Live session</span>
+            </header>
+            <div class="dash-chat-body" id="dash-chat-body"></div>
+          </section>
+        </section>
+
+        <aside class="dash-side" aria-label="Session details">
+          <section>
+            <h2>Provider</h2>
+            <strong id="dash-provider">-</strong>
+            <span class="dash-model" id="dash-model">-</span>
+          </section>
+          <section>
+            <h2>Usage</h2>
+            <dl>
+              <dt>Input</dt><dd id="dash-input">-</dd>
+              <dt>Output</dt><dd id="dash-output">-</dd>
+              <dt>Cached</dt><dd id="dash-cached">-</dd>
+            </dl>
+          </section>
+          <section>
+            <h2>Session</h2>
+            <dl>
+              <dt>ID</dt><dd id="dash-id">-</dd>
+              <dt>Permissions</dt><dd id="dash-mode">-</dd>
+              <dt>Status</dt><dd id="dash-state">offline</dd>
+            </dl>
+          </section>
+          <section>
+            <h2>Sandbox</h2>
+            <p>Managed by the CLI</p>
+          </section>
+        </aside>
       </div>
 
       <main class="transcript" id="transcript" aria-live="polite">
@@ -230,6 +325,6 @@
       </div>
     </div>
 
-    <script src="/app.js?v=0.1.3" type="module"></script>
+    <script src="/app.js?v=0.1.9" type="module"></script>
   </body>
 </html>

@@ -4,6 +4,18 @@ All notable changes are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning.
 
+## [Unreleased]
+
+### Added
+
+- Optional live dashboard view in `keycode remote`: an execution field,
+  event stream, provider and usage rails, and the real chat in one shell.
+  The default chat view remains available from the same toggle.
+
+### Changed
+
+- Session metadata now sits under the composer instead of the topbar.
+
 ## [0.1.3] - 2026-11-21
 
 Provider management release.
