@@ -9,6 +9,13 @@ import type { ToolContext } from "../contracts/tool.js";
 import { createAgentSetup, type AgentSetupOptions } from "../app/factory.js";
 import { trustWorkspace, untrustWorkspace } from "../app/trust.js";
 import { PRESETS } from "../providers/presets.js";
+import {
+  credentialStatus,
+  removeStoredCredential,
+  setStoredCredential,
+} from "../providers/credentials.js";
+import { canonicalProviderId } from "../providers/registry.js";
+import { fingerprint } from "../util/ids.js";
 import { keycodeHome, projectDir } from "../util/paths.js";
 import { silentLogger } from "../util/logger.js";
 import { systemClock } from "../util/clock.js";
@@ -19,7 +26,11 @@ import { createCodeModeTool } from "../tools/codemode.js";
 import { createBrowserTool, type BrowserDriver } from "../integrations/browser.js";
 import { BackgroundSessions } from "../integrations/background.js";
 import { IdeBridge } from "../integrations/ide.js";
-import { startRemoteControl, defaultWebDir } from "../integrations/remote.js";
+import {
+  startRemoteControl,
+  defaultWebDir,
+  type RemoteProviderStatus,
+} from "../integrations/remote.js";
 import { PermissionBroker } from "../permissions/broker.js";
 import { QuestionBroker } from "../questions/broker.js";
 import type { PromptChoice } from "../permissions/pipeline.js";
@@ -491,6 +502,63 @@ export function registerExtraCommands(program: Command): void {
         });
       };
 
+      const providerStatuses = (): RemoteProviderStatus[] => {
+        const custom = setup.settings.providers ?? {};
+        return providerCatalog().map((provider) => {
+          const preset = PRESETS[provider.id];
+          const config = custom[provider.id];
+          const stored = credentialStatus(setup.home, provider.id);
+          const envKey =
+            preset?.apiKeyEnv === null || preset?.apiKeyEnv === undefined
+              ? undefined
+              : process.env[preset.apiKeyEnv];
+          const source: RemoteProviderStatus["source"] = provider.local
+            ? null
+            : envKey !== undefined && envKey.length > 0
+              ? "env"
+              : stored.configured
+                ? "keychain"
+                : config?.apiKey !== undefined && config.apiKey.length > 0
+                  ? "config"
+                  : config?.apiKeyHelper !== undefined
+                    ? "helper"
+                    : null;
+          const visibleKey = envKey ?? config?.apiKey ?? null;
+          return {
+            ...provider,
+            configured:
+              provider.local ||
+              source !== null,
+            source,
+            fingerprint:
+              stored.fingerprint ?? (visibleKey === null ? null : fingerprint(visibleKey)),
+            apiKeyEnv: preset?.apiKeyEnv ?? null,
+            current: provider.id === setup.providerId,
+          };
+        });
+      };
+
+      const providerStatusesAfterKey = (
+        provider: string,
+        key: string,
+      ): RemoteProviderStatus[] => {
+        const id = canonicalProviderId(provider);
+        if (!providerCatalog().some((entry) => entry.id === id)) {
+          throw new KeycodeError("PROVIDER_NOT_FOUND", `Unknown provider "${id}"`);
+        }
+        const value = key.trim();
+        if (value.length === 0) {
+          throw new KeycodeError("CONFIG_INVALID", "API key is empty");
+        }
+        setStoredCredential(setup.home, id, value);
+        return providerStatuses();
+      };
+
+      const providerStatusesAfterRemove = (provider: string): RemoteProviderStatus[] => {
+        removeStoredCredential(setup.home, canonicalProviderId(provider));
+        return providerStatuses();
+      };
+
       const remotePermission = (): {
         id: string;
         tool: string;
@@ -567,6 +635,9 @@ export function registerExtraCommands(program: Command): void {
             return activate({ resume: meta.id, provider: meta.provider, model: meta.model });
           },
           catalog: () => providerCatalog(),
+          providerStatuses: () => providerStatuses(),
+          setProviderKey: (provider, key) => providerStatusesAfterKey(provider, key),
+          removeProviderKey: (provider) => providerStatusesAfterRemove(provider),
           setModel: async (provider, model) => {
             const sessionId = setup.sessionId;
             setup.store.setModel(sessionId, provider, model);

@@ -346,7 +346,11 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
     if (req.method === "GET" && asset !== undefined && options.staticDir !== undefined) {
       try {
         const body = readFileSync(join(options.staticDir, asset.file));
-        res.writeHead(200, { "content-type": asset.type, ...securityHeaders() });
+        res.writeHead(200, {
+          "content-type": asset.type,
+          "cache-control": "no-store",
+          ...securityHeaders(),
+        });
         res.end(body);
       } catch {
         res.statusCode = 404;
@@ -742,6 +746,63 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
             );
           } finally {
             setBusy(false);
+          }
+        })();
+        return;
+      }
+
+      if (message.type === "providers") {
+        void sendProviders(connection);
+        return;
+      }
+
+      if (
+        message.type === "provider_key" &&
+        typeof message.provider === "string" &&
+        typeof message.key === "string"
+      ) {
+        if (options.handler.setProviderKey === undefined) {
+          connection.send(
+            JSON.stringify({ type: "error", message: "provider keys are not available" }),
+          );
+          return;
+        }
+        void (async () => {
+          try {
+            const next = await options.handler.setProviderKey?.(message.provider ?? "", message.key ?? "");
+            if (next !== undefined) broadcast({ type: "providers", providers: next });
+            else broadcast({ type: "providers", providers: await providerStatuses() });
+          } catch (error) {
+            connection.send(
+              JSON.stringify({
+                type: "error",
+                message: (error as Error).message || "saving the provider key failed",
+              }),
+            );
+          }
+        })();
+        return;
+      }
+
+      if (message.type === "provider_remove" && typeof message.provider === "string") {
+        if (options.handler.removeProviderKey === undefined) {
+          connection.send(
+            JSON.stringify({ type: "error", message: "provider keys are not available" }),
+          );
+          return;
+        }
+        void (async () => {
+          try {
+            const next = await options.handler.removeProviderKey?.(message.provider ?? "");
+            if (next !== undefined) broadcast({ type: "providers", providers: next });
+            else broadcast({ type: "providers", providers: await providerStatuses() });
+          } catch (error) {
+            connection.send(
+              JSON.stringify({
+                type: "error",
+                message: (error as Error).message || "removing the provider key failed",
+              }),
+            );
           }
         })();
         return;

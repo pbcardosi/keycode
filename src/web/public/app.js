@@ -33,12 +33,23 @@ const sessionModal = $("session-modal");
 const sessionList = $("session-list");
 const sessionsButton = $("sessions-button");
 const newSessionButton = $("new-session");
-const modelModal = $("model-modal");
-const modelForm = $("model-form");
-const modelButton = $("model-button");
-const modelProvider = $("model-provider");
-const modelName = $("model-name");
-const modelOptions = $("model-options");
+const providerModal = $("provider-modal");
+const providersButton = $("providers-button");
+const providerList = $("provider-list");
+const providerName = $("provider-name");
+const providerIdLabel = $("provider-id");
+const providerBadge = $("provider-badge");
+const providerStatus = $("provider-status");
+const providerModel = $("provider-model");
+const providerModelHint = $("provider-model-hint");
+const providerKey = $("provider-key");
+const providerKeyHint = $("provider-key-hint");
+const providerKeySave = $("provider-key-save");
+const providerKeyRemove = $("provider-key-remove");
+const providerError = $("provider-error");
+const providerRefresh = $("provider-refresh");
+const providerSwitch = $("provider-switch");
+$("provider-close").addEventListener("click", closeProviders);
 const sessionFormModal = $("session-form-modal");
 const sessionForm = $("session-form");
 const sessionFormTitle = $("session-form-title");
@@ -54,7 +65,9 @@ let failures = 0;
 let currentSessionId = "";
 let currentProvider = "";
 let currentModel = "";
-let providers = [];
+let providerStatuses = [];
+let selectedProviderId = "";
+let providerKeyRequest = false;
 let sessions = [];
 let pendingSessionAction = null;
 let currentQuestion = null;
@@ -554,26 +567,243 @@ function renderSessionList() {
   }
 }
 
-function renderModelOptions() {
-  modelProvider.textContent = "";
-  for (const provider of providers) {
-    const option = element("option", "", provider.name);
-    option.value = provider.id;
-    modelProvider.appendChild(option);
-  }
-  if (currentProvider) modelProvider.value = currentProvider;
-  const selected = providers.find((provider) => provider.id === modelProvider.value);
-  renderModelNames(selected);
-  modelName.value = currentModel;
+function providerFlag(label, tone = "") {
+  return element("span", `provider-flag ${tone}`.trim(), label);
 }
 
-function renderModelNames(provider) {
-  modelOptions.textContent = "";
-  for (const id of provider?.models ?? []) {
-    const option = document.createElement("option");
-    option.value = id;
-    modelOptions.appendChild(option);
+function selectedProvider() {
+  return providerStatuses.find((provider) => provider.id === selectedProviderId) ?? null;
+}
+
+function providerSource(provider) {
+  switch (provider.source) {
+    case "env":
+      return `Key from ${provider.apiKeyEnv ?? "the environment"}.`;
+    case "keychain":
+      return provider.fingerprint
+        ? `Saved key. Fingerprint ${provider.fingerprint}.`
+        : "Saved key.";
+    case "config":
+      return "Key from settings.";
+    case "helper":
+      return "Key from apiKeyHelper.";
+    default:
+      return provider.local === true
+        ? "Local provider. No API key required."
+        : "No key configured.";
   }
+}
+
+function providerFlags(provider) {
+  const flags = [];
+  if (provider.current) flags.push(providerFlag("Current", "current"));
+  if (provider.local) flags.push(providerFlag("Local", "ok"));
+  else if (provider.configured) {
+    const source =
+      provider.source === "env"
+        ? "Env key"
+        : provider.source === "keychain"
+          ? "Key saved"
+          : provider.source === "config"
+            ? "Settings"
+            : provider.source === "helper"
+              ? "Helper"
+              : "Ready";
+    flags.push(providerFlag(source, "ok"));
+  } else {
+    flags.push(providerFlag("Needs key", "warn"));
+  }
+  return flags;
+}
+
+function updateProviderDetail() {
+  const provider = selectedProvider();
+  if (provider === null) {
+    providerName.textContent = "No providers";
+    providerIdLabel.textContent = "";
+    providerBadge.className = "provider-flag";
+    providerBadge.textContent = "";
+    providerStatus.textContent = "Connect to a session to load providers.";
+    providerModel.value = "";
+    providerModel.disabled = true;
+    providerKey.disabled = true;
+    providerKeySave.disabled = true;
+    providerKeyRemove.disabled = true;
+    providerSwitch.disabled = true;
+    return;
+  }
+
+  providerName.textContent = provider.name;
+  providerIdLabel.textContent = provider.id;
+  const badgeTone = provider.current ? "current" : provider.configured ? "ok" : "warn";
+  providerBadge.className = `provider-flag ${badgeTone}`;
+  providerBadge.textContent = provider.current
+    ? "Current"
+    : provider.local
+      ? "Local"
+      : provider.configured
+        ? "Ready"
+        : "Needs key";
+  providerStatus.textContent = providerSource(provider);
+
+  const previousModel = providerModel.value;
+  const models = [
+    ...new Set(
+      [
+        ...(provider.models ?? []),
+        provider.defaultModel,
+        provider.current ? currentModel : "",
+      ].filter((model) => typeof model === "string" && model.length > 0),
+    ),
+  ];
+  providerModel.textContent = "";
+  for (const model of models) {
+    const option = document.createElement("option");
+    option.value = model;
+    option.textContent = model;
+    providerModel.appendChild(option);
+  }
+  if (models.length === 0) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No models reported";
+    providerModel.appendChild(option);
+  }
+  const desiredModel =
+    providerModel.dataset.provider === provider.id && models.includes(previousModel)
+      ? previousModel
+      : provider.current && currentModel.length > 0
+        ? currentModel
+        : provider.defaultModel || models[0] || "";
+  providerModel.value = models.includes(desiredModel) ? desiredModel : (models[0] ?? "");
+  providerModel.dataset.provider = provider.id;
+  providerModel.disabled = models.length === 0;
+  providerModelHint.textContent =
+    models.length === 0
+      ? "No models reported. Add models in settings."
+      : "Switching keeps this session and its history.";
+  providerSwitch.disabled = models.length === 0;
+
+  const local = provider.local === true;
+  const locked = provider.source === "env" || provider.source === "config";
+  providerKey.disabled = local || locked || providerKeyRequest;
+  providerKey.value = "";
+  providerKey.placeholder = local
+    ? "No key required"
+    : locked
+      ? "Managed outside KeyCode"
+      : provider.source === "keychain"
+        ? "Paste a replacement key"
+        : "Paste a new key";
+  providerKeySave.disabled = local || locked || providerKeyRequest;
+  providerKeyRemove.disabled =
+    local || provider.source !== "keychain" || providerKeyRequest;
+
+  if (local) {
+    providerKeyHint.textContent = "This provider runs locally. No API key is required.";
+  } else if (provider.source === "env") {
+    providerKeyHint.textContent = `This key comes from ${provider.apiKeyEnv ?? "the environment"}. Change the environment variable to replace it.`;
+  } else if (provider.source === "config") {
+    providerKeyHint.textContent =
+      "This key comes from settings. Edit the settings file to change it.";
+  } else if (provider.source === "helper") {
+    providerKeyHint.textContent =
+      "This key comes from apiKeyHelper. A saved key takes precedence.";
+  } else if (provider.source === "keychain") {
+    providerKeyHint.textContent =
+      "Saving a new key replaces the stored key. Keys stay on this machine.";
+  } else {
+    providerKeyHint.textContent = "Keys are stored locally, never in settings.";
+  }
+}
+
+function selectProvider(id) {
+  selectedProviderId = id;
+  providerModel.dataset.provider = "";
+  hideProviderError();
+  renderProviderList();
+  revealSelectedProvider();
+  if (!providerModal.hidden) {
+    providerModel.focus();
+  }
+}
+
+function revealSelectedProvider() {
+  const selected = providerList.querySelector('[aria-pressed="true"]');
+  selected?.scrollIntoView({ block: "nearest" });
+}
+
+function renderProviderList() {
+  providerList.textContent = "";
+  if (providerStatuses.length === 0) {
+    const note = element("p", "provider-status", "No providers reported yet.");
+    providerList.appendChild(note);
+    updateProviderDetail();
+    return;
+  }
+
+  for (const provider of providerStatuses) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "provider-item";
+    item.setAttribute("aria-pressed", provider.id === selectedProviderId ? "true" : "false");
+    item.append(
+      element("span", "provider-item-name", provider.name),
+      element("span", "provider-item-id", provider.id),
+    );
+    const flags = document.createElement("span");
+    flags.className = "provider-flags";
+    flags.append(...providerFlags(provider));
+    item.appendChild(flags);
+    item.addEventListener("click", () => selectProvider(provider.id));
+    providerList.appendChild(item);
+  }
+
+  if (!providerStatuses.some((provider) => provider.id === selectedProviderId)) {
+    const current =
+      providerStatuses.find((provider) => provider.current) ?? providerStatuses[0];
+    selectedProviderId = current?.id ?? "";
+    providerModel.dataset.provider = "";
+  }
+  updateProviderDetail();
+}
+
+function showProviderError(message) {
+  providerError.textContent = message;
+  providerError.hidden = false;
+}
+
+function hideProviderError() {
+  providerError.hidden = true;
+  providerError.textContent = "";
+}
+
+function openProviders() {
+  providerModal.hidden = false;
+  hideProviderError();
+  providerKey.value = "";
+  providerKeyRequest = false;
+  if (providerStatuses.length === 0) send({ type: "providers" });
+  if (selectedProviderId.length === 0) {
+    const current =
+      providerStatuses.find((provider) => provider.id === currentProvider) ??
+      providerStatuses.find((provider) => provider.current) ??
+      providerStatuses[0];
+    selectedProviderId = current?.id ?? "";
+    providerModel.dataset.provider = "";
+  }
+  renderProviderList();
+  revealSelectedProvider();
+  if (selectedProviderId.length > 0) {
+    providerModel.focus();
+  }
+}
+
+function closeProviders() {
+  providerModal.hidden = true;
+  providerKey.value = "";
+  providerKeyRequest = false;
+  hideProviderError();
 }
 
 function openSessionForm(action, session) {
@@ -630,10 +860,25 @@ function handleMessage(message) {
       sessions = Array.isArray(message.sessions) ? message.sessions : [];
       renderSessionList();
       break;
-    case "catalog":
-      providers = Array.isArray(message.providers) ? message.providers : [];
-      if (!modelModal.hidden) renderModelOptions();
+    case "providers": {
+      const next = Array.isArray(message.providers) ? message.providers : [];
+      providerKeyRequest = false;
+      if (next.length === 0 && providerStatuses.length > 0) break;
+      providerStatuses = next;
+      if (!providerModal.hidden) {
+        if (!providerStatuses.some((provider) => provider.id === selectedProviderId)) {
+          const target =
+            providerStatuses.find((provider) => provider.current) ?? providerStatuses[0];
+          if (target !== undefined) {
+            selectedProviderId = target.id;
+            providerModel.dataset.provider = "";
+          }
+        }
+        renderProviderList();
+        revealSelectedProvider();
+      }
       break;
+    }
     case "model_changed":
       renderMeta(message.info);
       setStatus("ready", "ready");
@@ -659,6 +904,11 @@ function handleMessage(message) {
       endTurn();
       break;
     case "error":
+      if (!providerModal.hidden) {
+        providerKeyRequest = false;
+        showProviderError(message.message ?? "Something went wrong.");
+        updateProviderDetail();
+      }
       showError(message.message ?? "Something went wrong.");
       break;
     default:
@@ -776,31 +1026,83 @@ newSessionButton.addEventListener("click", () => {
   }
 });
 
-modelButton.addEventListener("click", () => {
-  modelModal.hidden = false;
-  renderModelOptions();
-  if (providers.length === 0) send({ type: "catalog" });
-  modelName.focus();
+providersButton.addEventListener("click", openProviders);
+
+providerModal.addEventListener("click", (event) => {
+  if (event.target === providerModal) closeProviders();
 });
 
-modelProvider.addEventListener("change", () => {
-  const provider = providers.find((entry) => entry.id === modelProvider.value);
-  renderModelNames(provider);
-  if (provider && provider.defaultModel) modelName.value = provider.defaultModel;
+providerRefresh.addEventListener("click", () => {
+  providerKeyRequest = false;
+  providerStatus.textContent = "Refreshing providers...";
+  send({ type: "providers" });
 });
 
-modelForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  const provider = modelProvider.value;
-  const model = modelName.value.trim();
-  if (provider.length === 0 || model.length === 0) return;
-  modelModal.hidden = true;
+providerModel.addEventListener("change", () => {
+  providerSwitch.disabled = providerModel.value.trim().length === 0;
+});
+
+providerKey.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    providerKeySave.click();
+  }
+});
+
+providerKeySave.addEventListener("click", () => {
+  const provider = selectedProvider();
+  if (provider === null) return;
+  const key = providerKey.value.trim();
+  if (key.length === 0) {
+    showProviderError("Enter an API key first.");
+    return;
+  }
+  if (socket === null || socket.readyState !== WebSocket.OPEN) {
+    showProviderError("Not connected to KeyCode.");
+    return;
+  }
+  providerKey.value = "";
+  providerKeyRequest = true;
+  hideProviderError();
+  updateProviderDetail();
+  send({ type: "provider_key", provider: provider.id, key });
+});
+
+providerKeyRemove.addEventListener("click", () => {
+  const provider = selectedProvider();
+  if (provider === null || provider.source !== "keychain") return;
+  if (socket === null || socket.readyState !== WebSocket.OPEN) {
+    showProviderError("Not connected to KeyCode.");
+    return;
+  }
+  providerKeyRequest = true;
+  hideProviderError();
+  updateProviderDetail();
+  send({ type: "provider_remove", provider: provider.id });
+});
+
+providerSwitch.addEventListener("click", () => {
+  const provider = selectedProvider();
+  const model = providerModel.value.trim();
+  if (provider === null || model.length === 0) return;
+  if (provider.local !== true && provider.configured !== true) {
+    showProviderError("Add an API key before switching to this provider.");
+    return;
+  }
+  if (socket === null || socket.readyState !== WebSocket.OPEN) {
+    showProviderError("Not connected to KeyCode.");
+    return;
+  }
+  providerModal.hidden = true;
   setStatus("switching", "busy");
-  send({ type: "model", provider, model });
+  send({ type: "model", provider: provider.id, model });
 });
 
-$("model-cancel").addEventListener("click", () => {
-  modelModal.hidden = true;
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !providerModal.hidden) {
+    event.preventDefault();
+    closeProviders();
+  }
 });
 
 $("context-clear").addEventListener("click", () => {
@@ -861,10 +1163,6 @@ sessionFormModal.addEventListener("click", (event) => {
     sessionFormModal.hidden = true;
     pendingSessionAction = null;
   }
-});
-
-modelModal.addEventListener("click", (event) => {
-  if (event.target === modelModal) modelModal.hidden = true;
 });
 
 $("sessions-close").addEventListener("click", () => {

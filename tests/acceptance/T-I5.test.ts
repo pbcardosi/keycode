@@ -81,6 +81,21 @@ describe("T-I5: Remote Control", () => {
     const forked: Array<[string, string | undefined]> = [];
     const deleted: string[] = [];
     const models: Array<[string, string]> = [];
+    const providerKeys: Array<[string, string]> = [];
+    const removedProviderKeys: string[] = [];
+    const fakeProviderStatus = {
+      id: "fake",
+      name: "Fake",
+      models: ["fake-model", "other-model"],
+      defaultModel: "fake-model",
+      free: true,
+      local: true,
+      configured: true,
+      source: null,
+      fingerprint: null,
+      apiKeyEnv: null,
+      current: true,
+    };
     const baseInfo = (provider = "fake", model = "fake-model") => ({
       provider,
       model,
@@ -136,6 +151,15 @@ describe("T-I5: Remote Control", () => {
             local: true,
           },
         ],
+        providerStatuses: () => [fakeProviderStatus],
+        setProviderKey: (provider, key) => {
+          providerKeys.push([provider, key]);
+          return [fakeProviderStatus];
+        },
+        removeProviderKey: (provider) => {
+          removedProviderKeys.push(provider);
+          return [fakeProviderStatus];
+        },
         setModel: (provider, model) => {
           models.push([provider, model]);
           return baseInfo(provider, model);
@@ -217,6 +241,8 @@ describe("T-I5: Remote Control", () => {
     expect(hello.permission?.id).toBe("perm-1");
     expect(hello.history).toHaveLength(1);
 
+    await nextOfType(client, "providers");
+
     client.send(JSON.stringify({ type: "permission", id: "perm-1", choice: "allow_once" }));
     const cleared = (await nextOfType(client, "permission")) as { type: string; permission: unknown };
     expect(cleared).toEqual({ type: "permission", permission: null });
@@ -269,6 +295,20 @@ describe("T-I5: Remote Control", () => {
     };
     expect(changed.info).toMatchObject({ provider: "fake", model: "other-model" });
     expect(models).toEqual([["fake", "other-model"]]);
+
+    client.send(JSON.stringify({ type: "provider_key", provider: "fake", key: "secret-key" }));
+    const keyed = (await nextOfType(client, "providers")) as {
+      providers: Array<{ id: string; configured: boolean }>;
+    };
+    expect(keyed.providers[0]).toMatchObject({ id: "fake", configured: true });
+    expect(providerKeys).toEqual([["fake", "secret-key"]]);
+
+    client.send(JSON.stringify({ type: "provider_remove", provider: "fake" }));
+    const unkeyed = (await nextOfType(client, "providers")) as {
+      providers: Array<{ id: string }>;
+    };
+    expect(unkeyed.providers[0]?.id).toBe("fake");
+    expect(removedProviderKeys).toEqual(["fake"]);
 
     client.send(JSON.stringify({ type: "rename", id: "aaaaaaaa-0000-0000-0000-000000000000", name: "renamed" }));
     await nextSessionsWhere(client, (session) => session.name === "renamed");

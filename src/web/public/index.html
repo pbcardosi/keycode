@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#121212" />
     <title>KeyCode</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.3" />
   </head>
   <body>
     <div class="app">
@@ -19,7 +19,7 @@
         <div class="session-actions">
           <button id="sessions-button" class="chip" type="button">Sessions</button>
           <button id="new-session" class="chip" type="button">New</button>
-          <button id="model-button" class="chip" type="button">Model</button>
+          <button id="providers-button" class="chip" type="button">Providers</button>
           <button id="artifacts-button" class="chip" type="button">Artifacts</button>
         </div>
         <div class="status" id="status" data-state="offline">offline</div>
@@ -103,26 +103,64 @@
       </div>
     </div>
 
-    <div class="modal" id="model-modal" hidden>
-      <form class="dialog" id="model-form">
+    <div class="modal" id="provider-modal" hidden>
+      <div
+        class="dialog provider-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="provider-title"
+      >
         <div class="dialog-head">
-          <h2>Model</h2>
-          <button type="button" id="model-cancel" class="ghost">Cancel</button>
+          <h2 id="provider-title">Providers</h2>
+          <div class="dialog-head-actions">
+            <button type="button" id="provider-refresh" class="ghost">Refresh</button>
+            <button type="button" id="provider-close" class="ghost">Close</button>
+          </div>
         </div>
-        <label class="field">
-          <span>Provider</span>
-          <select id="model-provider"></select>
-        </label>
-        <label class="field">
-          <span>Model</span>
-          <input id="model-name" list="model-options" autocomplete="off" spellcheck="false" />
-          <datalist id="model-options"></datalist>
-        </label>
-        <p class="hint">Switching keeps this session and its history.</p>
-        <div class="choices">
-          <button type="submit">Switch model</button>
+        <div class="provider-layout">
+          <div class="provider-list" id="provider-list" aria-label="Providers"></div>
+          <div class="provider-detail">
+            <div class="provider-head">
+              <div>
+                <h3 id="provider-name">Provider</h3>
+                <p class="provider-id" id="provider-id"></p>
+              </div>
+              <span class="provider-badge" id="provider-badge"></span>
+            </div>
+            <p class="provider-status" id="provider-status"></p>
+            <div class="model-slot">
+              <label class="field">
+                <span>Model</span>
+                <select id="provider-model"></select>
+              </label>
+              <p class="hint" id="provider-model-hint">Pick a model from this provider.</p>
+              <button type="button" id="provider-switch">Use model</button>
+            </div>
+            <div class="key-slot">
+              <div class="key-panel" id="key-panel">
+                <label class="field">
+                  <span>API key</span>
+                  <input
+                    id="provider-key"
+                    type="password"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="Paste a new key"
+                  />
+                </label>
+                <p class="hint" id="provider-key-hint"></p>
+                <div class="key-actions">
+                  <button type="button" id="provider-key-save">Save key</button>
+                  <button type="button" id="provider-key-remove" class="ghost">
+                    Remove saved key
+                  </button>
+                </div>
+              </div>
+              <p class="provider-error" id="provider-error" role="alert" hidden></p>
+            </div>
+          </div>
         </div>
-      </form>
+      </div>
     </div>
 
     <div class="modal" id="session-form-modal" hidden>
@@ -192,6 +230,6 @@
       </div>
     </div>
 
-    <script src="/app.js" type="module"></script>
+    <script src="/app.js?v=0.1.3" type="module"></script>
   </body>
 </html>
