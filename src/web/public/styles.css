@@ -150,6 +150,12 @@ body {
   white-space: nowrap;
 }
 
+.composer .meta {
+  flex: none;
+  margin-top: 8px;
+  text-align: left;
+}
+
 .status {
   font: 600 11px/1 var(--mono);
   letter-spacing: 0.08em;
@@ -266,6 +272,7 @@ body {
 .session-actions {
   display: flex;
   gap: 6px;
+  margin-left: auto;
 }
 
 .chip {
