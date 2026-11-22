@@ -6,6 +6,11 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- The topbar no longer has a Providers button; provider management opens from
+  Settings → **Manage providers**.
+
 ### Removed
 
 - The live dashboard view and its Settings controls from `keycode remote`. The

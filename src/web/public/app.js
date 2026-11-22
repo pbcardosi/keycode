@@ -45,7 +45,6 @@ const sessionList = $("session-list");
 const sessionsButton = $("sessions-button");
 const newSessionButton = $("new-session");
 const providerModal = $("provider-modal");
-const providersButton = $("providers-button");
 const providerList = $("provider-list");
 const providerName = $("provider-name");
 const providerIdLabel = $("provider-id");
@@ -284,7 +283,7 @@ settingsModal.addEventListener("click", (event) => {
 });
 settingsManageProviders.addEventListener("click", () => {
   closeSettings();
-  providersButton.click();
+  openProviders();
 });
 settingsPermission.addEventListener("change", () => {
   const mode = settingsPermission.value;
@@ -1254,7 +1253,6 @@ newSessionButton.addEventListener("click", () => {
   }
 });
 
-providersButton.addEventListener("click", openProviders);
 
 providerModal.addEventListener("click", (event) => {
   if (event.target === providerModal) closeProviders();
