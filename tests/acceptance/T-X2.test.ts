@@ -29,6 +29,8 @@ describe("T-X2: Skills", () => {
     expect("body" in (skills[0] as object)).toBe(false);
 
     const setup = await createAgentSetup({ cwd: ws, home, provider: "fake", trust: true });
+    expect(setup.agent.prompt).toContain("# Available skills");
+    expect(setup.agent.prompt).toContain("hello: Hello skill");
     expect(setup.agent.prompt).not.toContain("Use only Read");
 
     const out: string[] = [];
@@ -44,5 +46,14 @@ describe("T-X2: Skills", () => {
     writeText(file, SKILL.replace("Hello skill", "Updated skill"));
     const reloaded = discoverSkills({ cwd: ws, home, trusted: true });
     expect(reloaded[0]?.description).toBe("Updated skill");
+
+    writeText(
+      join(home, "skills", "user-only", "SKILL.md"),
+      ["---", "name: user-only", "description: User skill", "---", "User body."].join("\n"),
+    );
+    writeText(join(home, "skills", "hello", "SKILL.md"), SKILL.replace("Hello skill", "User hello"));
+    const merged = discoverSkills({ cwd: ws, home, trusted: true });
+    expect(merged.map((skill) => skill.name)).toContain("user-only");
+    expect(merged.find((skill) => skill.name === "hello")?.description).toBe("Updated skill");
   });
 });

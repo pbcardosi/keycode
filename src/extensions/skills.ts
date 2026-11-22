@@ -77,7 +77,7 @@ export function discoverSkills(options: DiscoverSkillsOptions): SkillMetadata[] 
     roots.push({ dir: join(options.cwd, ".claude", "skills"), source: "project" });
   }
   for (const dir of options.extraDirs ?? []) roots.push({ dir, source: "user" });
-  roots.push({ dir: join(options.home, ".keycode", "skills"), source: "user" });
+  roots.push({ dir: join(options.home, "skills"), source: "user" });
 
   const byName = new Map<string, SkillMetadata>();
   for (const root of roots) {

@@ -59,12 +59,34 @@ function toolDocs(tools: ToolSpec[]): string {
   return ["# Available tools", ...tools.map((tool) => `- ${tool.name}: ${tool.description}`)].join("\n");
 }
 
+function skillsSection(skills: SkillPromptEntry[] | undefined): string {
+  if (skills === undefined || skills.length === 0) return "";
+  const entries = skills.slice(0, 50).map((skill) => {
+    const hint = skill.argumentHint === undefined ? "" : ` ${skill.argumentHint}`;
+    const text = skill.description.replace(/\s+/g, " ").trim();
+    const description = text.length > 220 ? `${text.slice(0, 217)}...` : text;
+    return `- ${skill.name}${hint}: ${description}`;
+  });
+  return [
+    "# Available skills",
+    "Load a skill with the Skill tool when its description matches the task; skills add instructions and may restrict tools for the turn.",
+    ...entries,
+  ].join("\n");
+}
+
+export interface SkillPromptEntry {
+  name: string;
+  description: string;
+  argumentHint?: string | undefined;
+}
+
 export interface SystemPromptOptions {
   cwd: string;
   model: string;
   provider: string;
   memoryText: string;
   tools: ToolSpec[];
+  skills?: SkillPromptEntry[] | undefined;
   basePrompt?: string | undefined;
   appendPrompt?: string | undefined;
   outputStyle?: string | undefined;
@@ -81,6 +103,8 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
   }
   const docs = toolDocs(options.tools);
   if (docs.length > 0) sections.push(docs);
+  const skills = skillsSection(options.skills);
+  if (skills.length > 0) sections.push(skills);
   const memory = memorySection(options.memoryText);
   if (memory.length > 0) sections.push(memory);
 

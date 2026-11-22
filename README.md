@@ -513,6 +513,31 @@ server produces a warning and does not abort the session.
 
 ---
 
+## Skills
+
+Skills are markdown instructions loaded on demand. Put one at
+`.keycode/skills/<name>/SKILL.md` or `.claude/skills/<name>/SKILL.md` in a trusted
+workspace, or at `~/.keycode/skills/<name>/SKILL.md` for every project. The folder
+name is the fallback name.
+
+```markdown
+---
+name: release
+description: Cut a KeyCode release: bump, verify, tag, publish, artifacts.
+argument-hint: [version]
+allowed-tools: Read, Edit, Bash
+---
+Cut version $ARGUMENTS using docs/releasing.md.
+```
+
+Only `name`, `description`, and `argument-hint` are listed in the system prompt,
+so the agent can pick a skill by description. `/skills` prints the catalog, and
+the body loads only when the agent calls the Skill tool. `$ARGUMENTS` is replaced
+with the invocation arguments, and `allowed-tools` restricts the rest of the
+turn. Project skills win over user skills with the same name.
+
+---
+
 ## Documents
 
 | File | Purpose |

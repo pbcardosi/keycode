@@ -540,6 +540,11 @@ export async function createAgentSetup(options: AgentSetupOptions): Promise<Agen
     provider: providerId,
     memoryText,
     tools: specs,
+    skills: skills.map((skill) => ({
+      name: skill.name,
+      description: skill.description,
+      ...(skill.argumentHint === undefined ? {} : { argumentHint: skill.argumentHint }),
+    })),
     ...(options.systemPrompt === undefined ? {} : { basePrompt: options.systemPrompt }),
     ...(options.appendSystemPrompt === undefined ? {} : { appendPrompt: options.appendSystemPrompt }),
     ...(activeStyle?.body ? { outputStyle: activeStyle.body } : {}),

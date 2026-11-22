@@ -11,6 +11,13 @@ semantic versioning.
 - Artifacts panel gains an **Add artifact** form (name plus HTML), deletion for
   stored artifacts, and an automatic, removable example artifact when the panel
   opens empty. The CLI gains `keycode artifacts remove <id>`.
+- The system prompt lists available skills with their descriptions, so the agent
+  can choose one without being told its name.
+
+### Fixed
+
+- User-level skills under `~/.keycode/skills` are discovered; the lookup
+  previously used `~/.keycode/.keycode/skills`.
 
 ### Changed
 
