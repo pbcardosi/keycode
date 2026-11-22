@@ -37,6 +37,8 @@ export function createArtifactTool(
 ): Tool<ArtifactInputType> & {
   stop(): void;
   list(): ArtifactSummary[];
+  create(name: string, html: string): ArtifactSummary;
+  remove(id: string): boolean;
   preview(id: string, version?: number): Promise<string | null>;
 } {
   let preview: PreviewServer | null = null;
@@ -66,6 +68,20 @@ export function createArtifactTool(
     },
     list(): ArtifactSummary[] {
       return options.store.list();
+    },
+    create(name: string, html: string): ArtifactSummary {
+      const invalid = htmlError(html);
+      if (invalid) throw new KeycodeError("CONFIG_INVALID", invalid);
+      const artifact = options.store.create(name, html);
+      return {
+        id: artifact.id,
+        name: artifact.name,
+        latestVersion: 1,
+        createdAt: artifact.versions[0]?.createdAt ?? "",
+      };
+    },
+    remove(id: string): boolean {
+      return options.store.remove(id);
     },
     async preview(id: string, version?: number): Promise<string | null> {
       const artifact = options.store.get(id, version);

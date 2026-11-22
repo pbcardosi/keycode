@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { KeycodeError } from "../util/errors.js";
 import { ensureDir } from "../util/fsx.js";
@@ -112,6 +112,18 @@ export class ArtifactStore {
       latestVersion: artifact.versions.length,
       createdAt: artifact.versions[0]?.createdAt ?? "",
     }));
+  }
+
+  remove(id: string): boolean {
+    const had = this.artifacts.delete(id);
+    const file = this.fileFor(id);
+    if (file === null || !existsSync(file)) return had;
+    try {
+      unlinkSync(file);
+      return true;
+    } catch {
+      return had;
+    }
   }
 
   comment(id: string, version: number, text: string): boolean {

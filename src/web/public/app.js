@@ -40,6 +40,7 @@ const artifactModal = $("artifact-modal");
 const artifactList = $("artifact-list");
 const artifactFrame = $("artifact-frame");
 const artifactPlaceholder = $("artifact-placeholder");
+const artifactsDelete = $("artifacts-delete");
 const sessionModal = $("session-modal");
 const sessionList = $("session-list");
 const sessionsButton = $("sessions-button");
@@ -101,6 +102,8 @@ let currentQuestion = null;
 let trustState = null;
 let artifacts = [];
 let activeArtifactId = null;
+let deleteArmed = false;
+let deleteTimer = null;
 let currentAssistant = null;
 let renderTimer = null;
 const tools = new Map();
@@ -438,11 +441,31 @@ function sendTrust(accept) {
   send({ type: "trust", accept });
 }
 
+function resetDeleteArm() {
+  deleteArmed = false;
+  if (deleteTimer !== null) clearTimeout(deleteTimer);
+  deleteTimer = null;
+  artifactsDelete.textContent = "Delete";
+  artifactsDelete.classList.remove("danger");
+}
+
+function selectArtifact(id) {
+  resetDeleteArm();
+  activeArtifactId = id;
+  renderArtifactList();
+  artifactFrame.hidden = true;
+  artifactFrame.src = "about:blank";
+  artifactPlaceholder.hidden = false;
+  artifactPlaceholder.textContent = "Loading preview…";
+  send({ type: "artifact_preview", id });
+}
+
 function renderArtifactList() {
   artifactList.textContent = "";
+  artifactsDelete.disabled = !artifacts.some((artifact) => artifact.id === activeArtifactId);
   if (artifacts.length === 0) {
     artifactList.appendChild(
-      element("p", "hint", "No artifacts yet. Ask KeyCode to create one."),
+      element("p", "hint", "No artifacts yet. Ask KeyCode to create one, or add the example."),
     );
     return;
   }
@@ -458,21 +481,14 @@ function renderArtifactList() {
         `${artifact.id} · v${artifact.latestVersion} · ${new Date(artifact.createdAt).toLocaleString()}`,
       ),
     );
-    item.addEventListener("click", () => {
-      activeArtifactId = artifact.id;
-      renderArtifactList();
-      artifactFrame.hidden = true;
-      artifactFrame.src = "about:blank";
-      artifactPlaceholder.hidden = false;
-      artifactPlaceholder.textContent = "Loading preview…";
-      send({ type: "artifact_preview", id: artifact.id });
-    });
+    item.addEventListener("click", () => selectArtifact(artifact.id));
     artifactList.appendChild(item);
   }
 }
 
 function openArtifacts() {
   artifactModal.hidden = false;
+  resetDeleteArm();
   renderArtifactList();
   send({ type: "artifacts" });
 }
@@ -1054,10 +1070,33 @@ function handleMessage(message) {
     case "trust":
       applyTrust(message.trust ?? null);
       break;
-    case "artifacts":
+    case "artifacts": {
       artifacts = Array.isArray(message.artifacts) ? message.artifacts : [];
+      if (message.example === true) {
+        const newest = artifacts.reduce(
+          (best, item) =>
+            best === null || String(item.createdAt) > String(best.createdAt) ? item : best,
+          null,
+        );
+        if (newest !== null) {
+          selectArtifact(newest.id);
+          break;
+        }
+      }
+      if (
+        activeArtifactId !== null &&
+        !artifacts.some((artifact) => artifact.id === activeArtifactId)
+      ) {
+        activeArtifactId = null;
+        resetDeleteArm();
+        artifactFrame.hidden = true;
+        artifactFrame.src = "about:blank";
+        artifactPlaceholder.hidden = false;
+        artifactPlaceholder.textContent = "Select an artifact to preview it.";
+      }
       renderArtifactList();
       break;
+    }
     case "artifact_preview":
       showArtifactPreview(message);
       break;
@@ -1356,6 +1395,24 @@ $("artifacts-close").addEventListener("click", () => {
 $("artifacts-refresh").addEventListener("click", () => {
   renderArtifactList();
   send({ type: "artifacts" });
+});
+
+$("artifacts-example").addEventListener("click", () => {
+  send({ type: "artifact_example" });
+});
+
+artifactsDelete.addEventListener("click", () => {
+  if (activeArtifactId === null) return;
+  if (!deleteArmed) {
+    deleteArmed = true;
+    artifactsDelete.textContent = "Confirm delete";
+    artifactsDelete.classList.add("danger");
+    deleteTimer = setTimeout(resetDeleteArm, 4000);
+    return;
+  }
+  const id = activeArtifactId;
+  resetDeleteArm();
+  send({ type: "artifact_delete", id });
 });
 
 artifactModal.addEventListener("click", (event) => {

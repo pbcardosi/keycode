@@ -461,20 +461,36 @@ describe("T-I5: Remote Control", () => {
   });
 
   it("lists artifacts and returns tokenized previews", async () => {
+    const stored = [
+      {
+        id: "artifact_1",
+        name: "report",
+        latestVersion: 2,
+        createdAt: "2026-11-20T00:00:00.000Z",
+      },
+    ];
     const server = await startRemoteControl({
       token: "pair-token",
       handler: {
         onPrompt: async () => "ok",
-        artifacts: () => [
-          {
-            id: "artifact_1",
-            name: "report",
-            latestVersion: 2,
-            createdAt: "2026-11-20T00:00:00.000Z",
-          },
-        ],
+        artifacts: () => [...stored],
         artifactPreview: (id, version) =>
           `http://127.0.0.1:9999/artifacts/${id}/${version ?? 2}?token=t`,
+        createExampleArtifact: () => {
+          stored.push({
+            id: "artifact_2",
+            name: "Example artifact",
+            latestVersion: 1,
+            createdAt: "2026-11-21T00:00:00.000Z",
+          });
+          return [...stored];
+        },
+        deleteArtifact: (id) => {
+          const index = stored.findIndex((item) => item.id === id);
+          if (index === -1) throw new Error("Artifact not found");
+          stored.splice(index, 1);
+          return [...stored];
+        },
       },
     });
 
@@ -492,6 +508,22 @@ describe("T-I5: Remote Control", () => {
     };
     expect(preview.id).toBe("artifact_1");
     expect(preview.url).toContain("token=t");
+
+    client.send(JSON.stringify({ type: "artifact_example" }));
+    const created = (await nextOfType(client, "artifacts")) as {
+      artifacts: Array<{ id: string }>;
+      example?: boolean;
+    };
+    expect(created.example).toBe(true);
+    expect(created.artifacts.map((artifact) => artifact.id)).toContain("artifact_2");
+
+    client.send(JSON.stringify({ type: "artifact_delete", id: "artifact_2" }));
+    const afterDelete = (await nextOfType(client, "artifacts")) as {
+      artifacts: Array<{ id: string }>;
+      example?: boolean;
+    };
+    expect(afterDelete.artifacts.map((artifact) => artifact.id)).not.toContain("artifact_2");
+    expect(afterDelete.example).toBeUndefined();
 
     client.close();
     await server.close();

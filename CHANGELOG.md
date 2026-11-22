@@ -6,6 +6,11 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Artifacts panel can add a removable example artifact and delete stored
+  artifacts. The CLI gains `keycode artifacts remove <id>`.
+
 ### Changed
 
 - The topbar no longer has a Providers button; provider management opens from

@@ -113,6 +113,8 @@ export interface RemoteHandler {
   artifactPreview?:
     | ((id: string, version?: number | undefined) => Promise<string | null> | string | null)
     | undefined;
+  createExampleArtifact?: (() => Promise<RemoteArtifact[]> | RemoteArtifact[]) | undefined;
+  deleteArtifact?: ((id: string) => Promise<RemoteArtifact[]> | RemoteArtifact[]) | undefined;
   providerStatuses?:
     | (() => Promise<RemoteProviderStatus[]> | RemoteProviderStatus[])
     | undefined;
@@ -641,6 +643,52 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
 
       if (message.type === "artifacts") {
         void sendArtifacts(connection);
+        return;
+      }
+
+      if (message.type === "artifact_example") {
+        if (options.handler.createExampleArtifact === undefined) {
+          connection.send(JSON.stringify({ type: "error", message: "artifacts are not available" }));
+          return;
+        }
+        void (async () => {
+          try {
+            const next = await options.handler.createExampleArtifact?.();
+            broadcast({
+              type: "artifacts",
+              artifacts: next ?? (await artifacts()),
+              example: true,
+            });
+          } catch (error) {
+            connection.send(
+              JSON.stringify({
+                type: "error",
+                message: (error as Error).message || "could not create the example artifact",
+              }),
+            );
+          }
+        })();
+        return;
+      }
+
+      if (message.type === "artifact_delete" && message.id !== undefined) {
+        if (options.handler.deleteArtifact === undefined) {
+          connection.send(JSON.stringify({ type: "error", message: "artifacts are not available" }));
+          return;
+        }
+        void (async () => {
+          try {
+            const next = await options.handler.deleteArtifact?.(message.id ?? "");
+            broadcast({ type: "artifacts", artifacts: next ?? (await artifacts()) });
+          } catch (error) {
+            connection.send(
+              JSON.stringify({
+                type: "error",
+                message: (error as Error).message || "could not delete the artifact",
+              }),
+            );
+          }
+        })();
         return;
       }
 

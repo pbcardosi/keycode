@@ -48,6 +48,7 @@ import { importConfigs } from "../integrations/import.js";
 import { checkForUpdate } from "../updates/index.js";
 import { startGateway } from "../gateway/index.js";
 import { ArtifactStore, startPreview } from "../artifacts/store.js";
+import { EXAMPLE_ARTIFACT_HTML, EXAMPLE_ARTIFACT_NAME } from "../artifacts/example.js";
 import { LspClient } from "../lsp/client.js";
 import { AutoMemoryStore } from "../storage/autoMemory.js";
 import { runWorkflow } from "../extensions/workflows.js";
@@ -733,6 +734,22 @@ export function registerExtraCommands(program: Command): void {
           artifacts: () => setup.artifacts?.list() ?? [],
           artifactPreview: async (id, version) =>
             (await setup.artifacts?.preview(id, version)) ?? null,
+          createExampleArtifact: () => {
+            if (setup.artifacts === undefined) {
+              throw new KeycodeError("CONFIG_INVALID", "Artifacts are disabled.");
+            }
+            setup.artifacts.create(EXAMPLE_ARTIFACT_NAME, EXAMPLE_ARTIFACT_HTML);
+            return setup.artifacts.list();
+          },
+          deleteArtifact: (id) => {
+            if (setup.artifacts === undefined) {
+              throw new KeycodeError("CONFIG_INVALID", "Artifacts are disabled.");
+            }
+            if (!setup.artifacts.remove(id)) {
+              throw new KeycodeError("CONFIG_INVALID", `Artifact not found: ${id}`);
+            }
+            return setup.artifacts.list();
+          },
           resume: async (id) => {
             if (id === null) return activate({});
             const meta = setup.store.resolve(id);
@@ -902,7 +919,7 @@ export function registerExtraCommands(program: Command): void {
 
   program
     .command("artifacts <action> [id]")
-    .description("Create, publish, preview, inspect, or annotate local artifacts")
+    .description("Create, publish, preview, inspect, remove, or annotate local artifacts")
     .option("--name <name>", "artifact name")
     .option("--file <path>", "HTML file")
     .option("--version <n>", "version")
@@ -931,6 +948,10 @@ export function registerExtraCommands(program: Command): void {
         return;
       }
       if (!id) throw new KeycodeError("CONFIG_INVALID", `artifacts ${action} requires an id`);
+      if (action === "remove" || action === "delete") {
+        emit(store.remove(id) ? "Artifact removed." : "Artifact not found.", options.json);
+        return;
+      }
       if (action === "publish") {
         if (typeof options.file !== "string") {
           throw new KeycodeError("CONFIG_INVALID", "artifacts publish requires --file");
