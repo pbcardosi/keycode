@@ -11,6 +11,7 @@ semantic versioning.
 - The live dashboard view and its Settings controls from `keycode remote`. The
   chat view is the only view again; provider management, custom providers,
   Settings, and the composer session metadata are unchanged.
+- The neon dashboard prototype (`prototype/`) and `scripts/extract-trace.mjs`.
 
 ## [0.1.4] - 2026-11-21
 
