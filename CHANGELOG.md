@@ -9,7 +9,9 @@ semantic versioning.
 ### Added
 
 - Artifacts panel can add a removable example artifact and delete stored
-  artifacts. The CLI gains `keycode artifacts remove <id>`.
+  artifacts. Opening the panel now creates and previews the example
+  automatically when it is missing. The CLI gains
+  `keycode artifacts remove <id>`.
 
 ### Changed
 

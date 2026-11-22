@@ -104,6 +104,8 @@ let artifacts = [];
 let activeArtifactId = null;
 let deleteArmed = false;
 let deleteTimer = null;
+let artifactsOpening = false;
+let exampleChecked = false;
 let currentAssistant = null;
 let renderTimer = null;
 const tools = new Map();
@@ -489,6 +491,7 @@ function renderArtifactList() {
 function openArtifacts() {
   artifactModal.hidden = false;
   resetDeleteArm();
+  artifactsOpening = true;
   renderArtifactList();
   send({ type: "artifacts" });
 }
@@ -1080,6 +1083,23 @@ function handleMessage(message) {
         );
         if (newest !== null) {
           selectArtifact(newest.id);
+          break;
+        }
+      }
+      if (artifactsOpening) {
+        artifactsOpening = false;
+        const example = artifacts.find((artifact) => artifact.name === "Example artifact");
+        if (example !== undefined) {
+          selectArtifact(example.id);
+          break;
+        }
+        if (!exampleChecked) {
+          exampleChecked = true;
+          send({ type: "artifact_example" });
+          break;
+        }
+        if (artifacts.length > 0 && activeArtifactId === null) {
+          selectArtifact(artifacts[0].id);
           break;
         }
       }
