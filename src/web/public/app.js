@@ -33,16 +33,6 @@ const dashNew = $("dash-new");
 const dashProviders = $("dash-providers");
 const dashSettings = $("dash-settings");
 const dashArtifacts = $("dash-artifacts");
-const dashTerminal = $("dash-terminal");
-const terminalButton = $("terminal-button");
-const terminalPanel = $("terminal-panel");
-const terminalOutput = $("terminal-output");
-const terminalForm = $("terminal-form");
-const terminalInput = $("terminal-input");
-const terminalRun = $("terminal-run");
-const terminalStop = $("terminal-stop");
-const terminalClear = $("terminal-clear");
-const terminalStatus = $("terminal-status");
 const settingsButton = $("settings-button");
 const settingsModal = $("settings-modal");
 const settingsClose = $("settings-close");
@@ -155,11 +145,6 @@ let activeArtifactId = null;
 let currentAssistant = null;
 let renderTimer = null;
 const tools = new Map();
-let terminalEnabled = false;
-let terminalRunning = false;
-let terminalActiveId = "";
-const terminalHistory = [];
-let terminalHistoryIndex = 0;
 
 function setStatus(text, state) {
   statusEl.textContent = text;
@@ -680,106 +665,6 @@ const permissionHints = {
   dontAsk: "Deny anything that would require approval.",
   bypassPermissions: "Skip permission prompts. Use only in a trusted workspace.",
 };
-
-function setTerminalStatus(text) {
-  terminalStatus.textContent = text;
-}
-
-function applyTerminalRunning(value) {
-  terminalRunning = value;
-  terminalStop.disabled = !value;
-  terminalRun.disabled = value;
-  if (!value) terminalActiveId = "";
-}
-
-function terminalWrite(text) {
-  // Strip ANSI control sequences; the panel renders plain UTF-8 text.
-  const clean = String(text)
-    .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, "")
-    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "")
-    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "");
-  if (clean.length === 0) return;
-  const nearBottom =
-    terminalOutput.scrollTop + terminalOutput.clientHeight >= terminalOutput.scrollHeight - 24;
-  terminalOutput.textContent += clean;
-  if (terminalOutput.textContent.length > 400_000) {
-    terminalOutput.textContent = terminalOutput.textContent.slice(-300_000);
-  }
-  if (nearBottom || terminalRunning) terminalOutput.scrollTop = terminalOutput.scrollHeight;
-}
-
-function openTerminal() {
-  if (!terminalEnabled) {
-    showError("The terminal is not available on this server.");
-    return;
-  }
-  terminalPanel.hidden = false;
-  terminalInput.focus();
-}
-
-function closeTerminal() {
-  terminalPanel.hidden = true;
-  input.focus();
-}
-
-function submitTerminal() {
-  const command = terminalInput.value.trim();
-  if (command.length === 0) return;
-  if (socket === null || socket.readyState !== WebSocket.OPEN) {
-    showError("Not connected to KeyCode.");
-    return;
-  }
-  const id = crypto.randomUUID();
-  terminalActiveId = id;
-  terminalHistory.push(command);
-  if (terminalHistory.length > 100) terminalHistory.shift();
-  terminalHistoryIndex = terminalHistory.length;
-  terminalInput.value = "";
-  terminalWrite(`\n$ ${command}\n`);
-  applyTerminalRunning(true);
-  setTerminalStatus("waiting…");
-  terminalOutput.scrollTop = terminalOutput.scrollHeight;
-  send({ type: "terminal_run", id, command });
-}
-
-terminalButton.addEventListener("click", () =>
-  terminalPanel.hidden ? openTerminal() : closeTerminal(),
-);
-dashTerminal.addEventListener("click", openTerminal);
-$("terminal-close").addEventListener("click", closeTerminal);
-terminalClear.addEventListener("click", () => {
-  terminalOutput.textContent = "";
-  setTerminalStatus("idle");
-});
-terminalStop.addEventListener("click", () => {
-  if (terminalActiveId.length === 0) return;  if (socket === null || socket.readyState !== WebSocket.OPEN) {
-    showError("Not connected to KeyCode.");
-    return;
-  }
-  send({ type: "terminal_cancel", id: terminalActiveId });
-});
-terminalForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  submitTerminal();
-});
-terminalInput.addEventListener("keydown", (event) => {
-  if (event.key === "ArrowUp") {
-    event.preventDefault();
-    if (terminalHistoryIndex > 0) terminalHistoryIndex -= 1;
-    terminalInput.value = terminalHistory[terminalHistoryIndex] ?? "";
-    return;
-  }
-  if (event.key === "ArrowDown") {
-    event.preventDefault();
-    if (terminalHistoryIndex < terminalHistory.length - 1) terminalHistoryIndex += 1;
-    terminalInput.value = terminalHistory[terminalHistoryIndex] ?? "";
-    return;
-  }
-  if (event.key === "Escape") {
-    event.preventDefault();
-    closeTerminal();
-  }
-});
 
 function permissionHint(mode) {
   return permissionHints[mode] ?? permissionHints.manual;
@@ -1672,17 +1557,6 @@ function handleMessage(message) {
       applyTrust(message.trust ?? null);
       if (message.busy === true) startTurn();
       else setStatus("ready", "ready");
-      terminalEnabled = message.terminal?.enabled === true;
-      terminalButton.hidden = !terminalEnabled;
-      if (!terminalEnabled) terminalPanel.hidden = true;
-      if (message.terminal?.running) {
-        terminalActiveId = message.terminal.running.id ?? "";
-        applyTerminalRunning(true);
-        setTerminalStatus("running");
-      } else {
-        applyTerminalRunning(false);
-        setTerminalStatus("idle");
-      }
       break;
     case "event":
       handleEvent(message.event);
@@ -1764,39 +1638,6 @@ function handleMessage(message) {
     case "stopped":
       endTurn();
       break;
-    case "terminal_start":
-      terminalActiveId = typeof message.id === "string" ? message.id : terminalActiveId;
-      applyTerminalRunning(true);
-      setTerminalStatus(`running · ${message.shell ?? "shell"}`);
-      terminalWrite(`[${message.shell ?? "shell"} · ${message.cwd ?? ""}]\n`);
-      break;
-    case "terminal_output":
-      terminalWrite(typeof message.text === "string" ? message.text : "");
-      break;
-    case "terminal_exit": {
-      applyTerminalRunning(false);
-      const seconds =
-        typeof message.durationMs === "number" ? (message.durationMs / 1000).toFixed(1) : "0.0";
-      if (typeof message.denied === "string" && message.denied.length > 0) {
-        setTerminalStatus("denied");
-        terminalWrite(`\n[denied] ${message.denied}\n`);
-      } else if (message.cancelled === true) {
-        setTerminalStatus("cancelled");
-        terminalWrite(`\n[cancelled · ${seconds}s]\n`);
-      } else {
-        const code = message.code === null || message.code === undefined ? "?" : message.code;
-        setTerminalStatus(`exit ${code}`);
-        terminalWrite(
-          `\n[exit ${code} · ${seconds}s${message.truncated === true ? " · output truncated" : ""}]\n`,
-        );
-      }
-      break;
-    }
-    case "terminal_error":
-      applyTerminalRunning(false);
-      setTerminalStatus("error");
-      terminalWrite(`\n[error] ${message.message ?? "The command failed."}\n`);
-      break;
     case "error":
       if (!providerAddModal.hidden) {
         showProviderAddError(message.message ?? "Something went wrong.");
@@ -1842,8 +1683,6 @@ function connect() {
   });
   socket.addEventListener("close", () => {
     if (intentionalClose) return;
-    applyTerminalRunning(false);
-    setTerminalStatus("disconnected");
     failures += 1;
     setStatus("offline", "error");
     if (failures >= 3) {

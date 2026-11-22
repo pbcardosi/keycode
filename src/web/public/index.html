@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#121212" />
     <title>KeyCode</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css?v=0.1.4-console" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.4" />
   </head>
   <body>
     <div class="app">
@@ -19,7 +19,6 @@
           <button id="sessions-button" class="chip" type="button">Sessions</button>
           <button id="new-session" class="chip" type="button">New</button>
           <button id="dashboard-button" class="chip" type="button">Dashboard</button>
-        <button id="terminal-button" class="chip" type="button">Terminal</button>
           <button id="providers-button" class="chip" type="button">Providers</button>
           <button id="settings-button" class="chip" type="button">Settings</button>
           <button id="artifacts-button" class="chip" type="button">Artifacts</button>
@@ -47,7 +46,6 @@
             <button type="button" class="dash-nav-item" id="dash-new">New session</button>
             <button type="button" class="dash-nav-item" id="dash-providers">Providers</button>
             <button type="button" class="dash-nav-item" id="dash-settings">Settings</button>
-        <button type="button" class="dash-nav-item" id="dash-terminal">Terminal</button>
             <button type="button" class="dash-nav-item" id="dash-artifacts">Artifacts</button>
           </nav>
           <div class="dash-rail-foot">Neon dashboard</div>
@@ -165,38 +163,6 @@
         <div class="meta" id="meta"></div>
       </footer>
     </div>
-
-    <section class="terminal" id="terminal-panel" hidden aria-label="Command console">
-      <div class="terminal-head">
-        <div class="terminal-title">
-          <span class="terminal-mark">$</span>
-          <strong>Console</strong>
-          <span class="terminal-status" id="terminal-status">idle</span>
-        </div>
-        <div class="terminal-actions">
-          <button type="button" id="terminal-clear" class="ghost">Clear</button>
-          <button type="button" id="terminal-stop" class="ghost" disabled>Stop</button>
-          <button type="button" id="terminal-close" class="ghost">Close</button>
-        </div>
-      </div>
-      <pre class="terminal-output" id="terminal-output" role="log" aria-live="polite"></pre>
-      <form class="terminal-form" id="terminal-form">
-        <span class="terminal-prompt" aria-hidden="true">$</span>
-        <input
-          id="terminal-input"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="Run a command in the session workspace..."
-          aria-label="Command"
-        />
-        <button type="submit" id="terminal-run">Run</button>
-      </form>
-      <p class="terminal-hint">
-        Runs one command at a time through the Bash tool, with the same approvals and sandbox.
-        No TTY, so interactive prompts and full-screen programs are not supported. Up and down
-        arrows recall history.
-      </p>
-    </section>
 
     <div class="modal" id="token-modal" hidden>
       <form class="dialog" id="token-form">
@@ -498,6 +464,6 @@
       </div>
     </div>
 
-    <script src="/app.js?v=0.1.4-console" type="module"></script>
+    <script src="/app.js?v=0.1.4" type="module"></script>
   </body>
 </html>

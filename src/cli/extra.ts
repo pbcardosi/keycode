@@ -23,7 +23,6 @@ import { silentLogger } from "../util/logger.js";
 import { systemClock } from "../util/clock.js";
 import { KeycodeError } from "../util/errors.js";
 import { runCommand } from "../tools/bash.js";
-import { checkCommand, sandboxSpawn } from "../sandbox/command.js";
 import { VERSION } from "../version.js";
 import { createCodeModeTool } from "../tools/codemode.js";
 import { createBrowserTool, type BrowserDriver } from "../integrations/browser.js";
@@ -786,68 +785,6 @@ export function registerExtraCommands(program: Command): void {
           },
           deleteSession: (id) => {
             setup.store.delete(id);
-          },
-          startTerminal: (command, sink) => {
-            const cwd = setup.store.cwd;
-            const sandbox = setup.sandbox;
-            const controller = new AbortController();
-            sink.setCancel(() => controller.abort());
-            void (async () => {
-              try {
-                if (sandbox !== undefined) {
-                  const guarded = checkCommand(sandbox, command, cwd);
-                  if (!guarded.allowed) {
-                    sink.exit({
-                      code: null,
-                      durationMs: 0,
-                      denied: `SANDBOX_DENIED: ${guarded.reason ?? "blocked by the sandbox"}`,
-                    });
-                    return;
-                  }
-                }
-                const decision = await setup.permissions.check({
-                  tool: "Bash",
-                  input: { command },
-                  cwd,
-                  readOnly: false,
-                  preview: `$ ${command}`,
-                });
-                if (decision.behavior !== "allow") {
-                  sink.exit({ code: null, durationMs: 0, denied: decision.reason });
-                  return;
-                }
-                if (controller.signal.aborted) {
-                  sink.exit({ code: null, durationMs: 0 });
-                  return;
-                }
-                const launch =
-                  sandbox === undefined
-                    ? { command, args: [] as string[], shell: true }
-                    : sandboxSpawn(sandbox, command, cwd);
-                const shell =
-                  process.platform === "win32"
-                    ? (process.env.ComSpec ?? "cmd.exe")
-                    : (process.env.SHELL ?? "/bin/sh");
-                sink.start({ shell, cwd });
-                const result = await runCommand({
-                  command: launch.command,
-                  args: launch.args,
-                  shell: launch.shell,
-                  cwd,
-                  timeoutMs: 600_000,
-                  signal: controller.signal,
-                  maxOutputBytes: 1_000_000,
-                  onChunk: (stream, text) => sink.output(stream, text),
-                });
-                sink.exit({
-                  code: result.exitCode,
-                  durationMs: result.durationMs,
-                  truncated: result.truncated,
-                });
-              } catch (error) {
-                sink.error((error as Error).message || "The command could not run.");
-              }
-            })();
           },
         },
         permissions: {

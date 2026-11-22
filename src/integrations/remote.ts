@@ -89,20 +89,6 @@ export interface RemoteProviderStatus {
   current: boolean;
 }
 
-export interface RemoteTerminalSink {
-  /** Registers the cancel handle as soon as the handler can stop the command. */
-  setCancel(cancel: () => void): void;
-  start(info: { shell: string; cwd: string }): void;
-  output(stream: "stdout" | "stderr", text: string): void;
-  exit(result: {
-    code: number | null;
-    durationMs: number;
-    truncated?: boolean | undefined;
-    denied?: string | undefined;
-  }): void;
-  error(message: string): void;
-}
-
 export interface RemoteHandler {
   onPrompt(prompt: string): Promise<string>;
   onStop?: (() => void) | undefined;
@@ -142,9 +128,6 @@ export interface RemoteHandler {
         config: Record<string, unknown>,
         key?: string | undefined,
       ) => Promise<RemoteProviderStatus[]> | RemoteProviderStatus[])
-    | undefined;
-  startTerminal?:
-    | ((command: string, sink: RemoteTerminalSink) => void | Promise<void>)
     | undefined;
 }
 
@@ -288,116 +271,6 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
   const broadcast = (payload: unknown): void => {
     const text = JSON.stringify(payload);
     for (const client of clients) client.send(text);
-  };
-
-  const TERMINAL_MAX_COMMAND_CHARS = 8_000;
-  const TERMINAL_MAX_OUTPUT_CHARS = 1_000_000;
-  const TERMINAL_FLUSH_MS = 50;
-  const TERMINAL_RUN_WINDOW_MS = 60_000;
-  const TERMINAL_RUN_LIMIT = 10;
-
-  interface ActiveTerminal {
-    id: string;
-    command: string;
-    owner: WsConnection;
-    cancel: (() => void) | null;
-    cancelled: boolean;
-    finished: boolean;
-    truncated: boolean;
-    sent: number;
-    pending: { stdout: string; stderr: string };
-    timer: ReturnType<typeof setTimeout> | null;
-  }
-
-  let terminalRun: ActiveTerminal | null = null;
-  const terminalStarts: number[] = [];
-
-  const flushTerminal = (run: ActiveTerminal): void => {
-    if (run.timer !== null) {
-      clearTimeout(run.timer);
-      run.timer = null;
-    }
-    for (const stream of ["stdout", "stderr"] as const) {
-      const text = run.pending[stream];
-      if (text.length === 0) continue;
-      run.pending[stream] = "";
-      broadcast({ type: "terminal_output", id: run.id, stream, text });
-    }
-  };
-
-  const releaseTerminal = (run: ActiveTerminal): void => {
-    if (run.timer !== null) {
-      clearTimeout(run.timer);
-      run.timer = null;
-    }
-    if (terminalRun === run) terminalRun = null;
-  };
-
-  const pushTerminal = (
-    run: ActiveTerminal,
-    stream: "stdout" | "stderr",
-    text: string,
-  ): void => {
-    if (run.finished || text.length === 0) return;
-    const room = TERMINAL_MAX_OUTPUT_CHARS - run.sent;
-    if (room <= 0) {
-      if (!run.truncated) {
-        run.truncated = true;
-        flushTerminal(run);
-        broadcast({
-          type: "terminal_output",
-          id: run.id,
-          stream: "stderr",
-          text: "\n[output truncated]\n",
-        });
-      }
-      return;
-    }
-    const accepted = text.length > room ? text.slice(0, room) : text;
-    if (accepted.length < text.length) run.truncated = true;
-    run.sent += accepted.length;
-    run.pending[stream] += accepted;
-    if (run.pending[stream].length >= 8_192) flushTerminal(run);
-    else if (run.timer === null) {
-      run.timer = setTimeout(() => flushTerminal(run), TERMINAL_FLUSH_MS);
-    }
-  };
-
-  const finishTerminal = (
-    run: ActiveTerminal,
-    result: {
-      code: number | null;
-      durationMs: number;
-      truncated?: boolean | undefined;
-      denied?: string | undefined;
-    },
-  ): void => {
-    if (run.finished) return;
-    run.finished = true;
-    flushTerminal(run);
-    broadcast({
-      type: "terminal_exit",
-      id: run.id,
-      code: result.code,
-      durationMs: result.durationMs,
-      truncated: run.truncated || result.truncated === true,
-      ...(run.cancelled ? { cancelled: true } : {}),
-      ...(result.denied === undefined ? {} : { denied: result.denied }),
-    });
-    releaseTerminal(run);
-  };
-
-  const terminateTerminal = (run: ActiveTerminal): void => {
-    if (run.cancel !== null) {
-      run.cancelled = true;
-      run.cancel();
-      return;
-    }
-    broadcast({
-      type: "terminal_error",
-      id: run.id,
-      message: "The command has not started yet.",
-    });
   };
 
   const setBusy = (value: boolean): void => {
@@ -626,13 +499,6 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         history: history(),
         context,
         busy,
-        terminal: {
-          enabled: options.handler.startTerminal !== undefined,
-          running:
-            terminalRun === null
-              ? null
-              : { id: terminalRun.id, command: terminalRun.command },
-        },
       }),
     );
     void sendSessions(connection);
@@ -642,7 +508,6 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
 
     connection.onClose(() => {
       clients.delete(connection);
-      if (terminalRun !== null && terminalRun.owner === connection) terminateTerminal(terminalRun);
     });
 
     connection.onMessage((text) => {
@@ -662,7 +527,6 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         cancelled?: boolean;
         accept?: boolean;
         config?: unknown;
-        command?: string;
       };
       try {
         message = JSON.parse(text) as typeof message;
@@ -674,139 +538,6 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
       if (message.type === "stop") {
         options.handler.onStop?.();
         connection.send(JSON.stringify({ type: "stopped" }));
-        return;
-      }
-
-      if (message.type === "terminal_run") {
-        if (options.handler.startTerminal === undefined) {
-          connection.send(
-            JSON.stringify({
-              type: "terminal_error",
-              id: message.id ?? "",
-              message: "The terminal is not available.",
-            }),
-          );
-          return;
-        }
-        if (terminalRun !== null) {
-          connection.send(
-            JSON.stringify({
-              type: "terminal_error",
-              id: message.id ?? "",
-              message: "A command is already running.",
-            }),
-          );
-          return;
-        }
-        const command = typeof message.command === "string" ? message.command.trim() : "";
-        if (command.length === 0) {
-          connection.send(
-            JSON.stringify({ type: "terminal_error", id: message.id ?? "", message: "Enter a command." }),
-          );
-          return;
-        }
-        if (command.length > TERMINAL_MAX_COMMAND_CHARS) {
-          connection.send(
-            JSON.stringify({
-              type: "terminal_error",
-              id: message.id ?? "",
-              message: `Commands are limited to ${TERMINAL_MAX_COMMAND_CHARS} characters.`,
-            }),
-          );
-          return;
-        }
-        if (command.includes("\u0000")) {
-          connection.send(
-            JSON.stringify({ type: "terminal_error", id: message.id ?? "", message: "Invalid command." }),
-          );
-          return;
-        }
-        const requestedId =
-          typeof message.id === "string" && message.id.length > 0 && message.id.length <= 64
-            ? message.id
-            : randomUUID();
-        const now = Date.now();
-        while (terminalStarts.length > 0 && now - (terminalStarts[0] ?? 0) > TERMINAL_RUN_WINDOW_MS) {
-          terminalStarts.shift();
-        }
-        if (terminalStarts.length >= TERMINAL_RUN_LIMIT) {
-          connection.send(
-            JSON.stringify({
-              type: "terminal_error",
-              id: message.id ?? "",
-              message: "Too many commands. Wait a minute and try again.",
-            }),
-          );
-          return;
-        }
-        terminalStarts.push(now);
-
-        const run: ActiveTerminal = {
-          id: requestedId,
-          command,
-          owner: connection,
-          cancel: null,
-          cancelled: false,
-          finished: false,
-          truncated: false,
-          sent: 0,
-          pending: { stdout: "", stderr: "" },
-          timer: null,
-        };
-        terminalRun = run;
-        void (async () => {
-          try {
-            await options.handler.startTerminal?.(command, {
-              setCancel: (cancel) => {
-                run.cancel = cancel;
-              },
-              start: (info) => {
-                if (run.finished) return;
-                broadcast({
-                  type: "terminal_start",
-                  id: run.id,
-                  command: run.command,
-                  shell: info.shell,
-                  cwd: info.cwd,
-                });
-              },
-              output: (stream, text) => pushTerminal(run, stream, text),
-              exit: (result) => finishTerminal(run, result),
-              error: (text) => {
-                if (run.finished) return;
-                run.finished = true;
-                flushTerminal(run);
-                broadcast({ type: "terminal_error", id: run.id, message: text });
-                releaseTerminal(run);
-              },
-            });
-          } catch (error) {
-            if (run.finished) return;
-            run.finished = true;
-            flushTerminal(run);
-            broadcast({
-              type: "terminal_error",
-              id: run.id,
-              message: (error as Error).message || "The command could not start.",
-            });
-            releaseTerminal(run);
-          }
-        })();
-        return;
-      }
-
-      if (message.type === "terminal_cancel") {
-        if (terminalRun === null || terminalRun.id !== message.id) {
-          connection.send(
-            JSON.stringify({
-              type: "terminal_error",
-              id: message.id ?? "",
-              message: "No command is running.",
-            }),
-          );
-          return;
-        }
-        terminateTerminal(terminalRun);
         return;
       }
 
@@ -1248,7 +979,6 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
     token,
     close: () =>
       new Promise<void>((resolvePromise) => {
-        if (terminalRun !== null) terminalRun.cancel?.();
         unsubscribeEvents?.();
         unsubscribePermissions?.();
         unsubscribeQuestions?.();
