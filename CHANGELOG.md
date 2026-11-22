@@ -4,6 +4,14 @@ All notable changes are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning.
 
+## [Unreleased]
+
+### Removed
+
+- The live dashboard view and its Settings controls from `keycode remote`. The
+  chat view is the only view again; provider management, custom providers,
+  Settings, and the composer session metadata are unchanged.
+
 ## [0.1.4] - 2026-11-21
 
 ### Added

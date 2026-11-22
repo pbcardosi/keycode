@@ -1,38 +1,9 @@
 import { renderMarkdown } from "/markdown.js";
 
 const $ = (id) => document.getElementById(id);
-const appEl = document.querySelector(".app");
 const transcript = $("transcript");
 const empty = $("empty");
 const composerEl = document.querySelector(".composer");
-const dashboard = $("dashboard");
-const dashboardButton = $("dashboard-button");
-const dashChatBody = $("dash-chat-body");
-const dashEvents = $("dash-events");
-const dashCanvas = $("dash-canvas");
-const dashCanvasWrap = $("dash-canvas-wrap");
-const dashSessionName = $("dash-session-name");
-const dashSessionId = $("dash-session-id");
-const dashSessionTitle = $("dash-title");
-const dashSub = $("dash-sub");
-const dashStatus = $("dash-status");
-const dashEventCount = $("dash-event-count");
-const dashAxisStart = $("dash-axis-start");
-const dashAxisMid = $("dash-axis-mid");
-const dashProvider = $("dash-provider");
-const dashModel = $("dash-model");
-const dashInput = $("dash-input");
-const dashOutput = $("dash-output");
-const dashCached = $("dash-cached");
-const dashId = $("dash-id");
-const dashMode = $("dash-mode");
-const dashState = $("dash-state");
-const dashChat = $("dash-chat");
-const dashSessions = $("dash-sessions");
-const dashNew = $("dash-new");
-const dashProviders = $("dash-providers");
-const dashSettings = $("dash-settings");
-const dashArtifacts = $("dash-artifacts");
 const settingsButton = $("settings-button");
 const settingsModal = $("settings-modal");
 const settingsClose = $("settings-close");
@@ -41,9 +12,6 @@ const settingsManageProviders = $("settings-manage-providers");
 const settingsPermission = $("settings-permission");
 const settingsPermissionHint = $("settings-permission-hint");
 const settingsError = $("settings-error");
-const settingsChat = $("settings-chat");
-const settingsDashboard = $("settings-dashboard");
-const settingsMotion = $("settings-motion");
 const settingsSession = $("settings-session");
 const settingsState = $("settings-state");
 const input = $("input");
@@ -128,14 +96,6 @@ let selectedProviderId = "";
 let providerKeyRequest = false;
 let pendingProviderAdd = "";
 let currentPermissionMode = "";
-let dashboardOpen = false;
-let dashboardUsage = null;
-const toolTrace = [];
-let dashCtx = null;
-let dashSize = { width: 0, height: 0 };
-let dashRaf = 0;
-const dashReduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-let dashMotionEnabled = !dashReduceMotion;
 let sessions = [];
 let pendingSessionAction = null;
 let currentQuestion = null;
@@ -149,7 +109,6 @@ const tools = new Map();
 function setStatus(text, state) {
   statusEl.textContent = text;
   statusEl.dataset.state = state;
-  updateDashStatus();
 }
 
 function scrollIfNearBottom() {
@@ -266,395 +225,7 @@ function renderMeta(info) {
   currentProvider = info.provider ?? currentProvider;
   currentModel = info.model ?? currentModel;
   currentPermissionMode = info.permissionMode ?? currentPermissionMode;
-  if (dashboardOpen) renderDashboard();
   if (settingsModal !== null && !settingsModal.hidden) renderSettings();
-}
-
-const dashNumberFormat = new Intl.NumberFormat("en-US");
-const dashTheme = getComputedStyle(document.documentElement);
-const dashColors = {
-  cyan: dashTheme.getPropertyValue("--color-accent-cyan").trim() || "#00ffff",
-  magenta: dashTheme.getPropertyValue("--color-accent-magenta").trim() || "#ff00ff",
-  lime: dashTheme.getPropertyValue("--color-accent-lime").trim() || "#ccff00",
-  danger: dashTheme.getPropertyValue("--color-danger").trim() || "#ff2d6f",
-  border: dashTheme.getPropertyValue("--color-border").trim() || "rgba(0, 255, 255, 0.16)",
-  ink: dashTheme.getPropertyValue("--color-text-primary").trim() || "#e0e0e0",
-};
-
-function dashNumber(value) {
-  return value === null || value === undefined ? "-" : dashNumberFormat.format(Math.max(0, Math.round(value)));
-}
-
-function dashTime(date) {
-  return date.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-function dashLane(name, input) {
-  const lower = String(name).toLowerCase();
-  const command = typeof input?.command === "string" ? input.command : "";
-  if (lower === "read") return { key: "read", kind: "Read" };
-  if (["glob", "grep", "websearch", "webfetch"].includes(lower)) {
-    return { key: "search", kind: name };
-  }
-  if (["edit", "write", "notebookedit"].includes(lower)) {
-    return { key: "edit", kind: name };
-  }
-  if (
-    ["bash", "powershell"].includes(lower) &&
-    /(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:test|verify)|vitest|jest|mocha|pytest|cargo\s+test|go\s+test|dotnet\s+test|mvn\s+test|gradle\s+test/i.test(
-      command,
-    )
-  ) {
-    return { key: "test", kind: "Test" };
-  }
-  return { key: "shell", kind: name };
-}
-
-function dashTitle(name, input) {
-  const lower = String(name).toLowerCase();
-  if (["read", "write", "edit", "notebookedit"].includes(lower)) {
-    return String(input?.file_path ?? input?.path ?? name);
-  }
-  if (lower === "grep" || lower === "glob") {
-    return String(input?.pattern ?? input?.path ?? input?.query ?? name);
-  }
-  if (lower === "bash" || lower === "powershell") {
-    return String(input?.command ?? name);
-  }
-  if (lower === "websearch" || lower === "webfetch") {
-    return String(input?.query ?? input?.url ?? name);
-  }
-  if (lower === "task") {
-    return String(input?.description ?? input?.prompt ?? name);
-  }
-  return String(input?.file_path ?? input?.command ?? input?.query ?? name);
-}
-
-function dashLaneColor(lane) {
-  if (lane === "edit") return dashColors.magenta;
-  if (lane === "shell" || lane === "test") return dashColors.lime;
-  return dashColors.cyan;
-}
-
-function dashDuration(ms) {
-  if (ms < 1_000) return `${Math.round(ms)} ms`;
-  if (ms < 10_000) return `${(ms / 1_000).toFixed(1)} s`;
-  return `${Math.round(ms / 1_000)} s`;
-}
-
-function dashItemMeta(item) {
-  if (item.status === "running") return "running";
-  if (item.status === "error") return "failed";
-  return dashDuration(item.endAt - item.startAt);
-}
-
-function recordToolStart(event) {
-  if (event === null || typeof event !== "object") return;
-  const lane = dashLane(event.name, event.input);
-  toolTrace.push({
-    id: String(event.id ?? `${event.name}-${Date.now()}`),
-    name: String(event.name ?? "Tool"),
-    kind: lane.kind,
-    lane: lane.key,
-    title: dashTitle(event.name, event.input),
-    status: "running",
-    at: Date.now(),
-    startAt: Date.now(),
-    endAt: null,
-    perf: performance.now(),
-    endPerf: null,
-  });
-  if (toolTrace.length > 80) toolTrace.shift();
-  if (dashboardOpen) {
-    renderDashboard();
-    drawDash(performance.now());
-  }
-}
-
-function recordToolResult(event) {
-  if (event === null || typeof event !== "object") return;
-  const item = toolTrace.find((entry) => entry.id === String(event.id));
-  if (item === undefined) return;
-  item.endAt = Date.now();
-  item.endPerf = performance.now();
-  item.status = event.ok === true ? "ok" : "error";
-  if (dashboardOpen) {
-    renderDashboard();
-    drawDash(performance.now());
-  }
-}
-
-function resetDashboardTrace() {
-  toolTrace.length = 0;
-  dashboardUsage = null;
-  if (dashboardOpen) renderDashboard();
-}
-
-function updateDashStatus() {
-  if (dashStatus === null) return;
-  dashStatus.textContent = statusEl.textContent || "offline";
-  dashStatus.dataset.state = statusEl.dataset.state || "offline";
-  if (dashState !== null) dashState.textContent = statusEl.textContent || "offline";
-  if (settingsState !== null) settingsState.textContent = statusEl.textContent || "offline";
-}
-
-function dashEventRow(item) {
-  const row = element("li", "dash-event");
-  row.dataset.lane = item.lane;
-  row.dataset.status = item.status;
-  row.append(
-    element("span", "dash-event-time", dashTime(new Date(item.at))),
-    element("span", "dash-kind", item.kind),
-    element("span", "dash-event-title", item.title),
-    element("span", "dash-event-meta", dashItemMeta(item)),
-  );
-  row.lastElementChild?.setAttribute("title", dashItemMeta(item));
-  return row;
-}
-
-function renderDashEvents() {
-  if (dashEvents === null) return;
-  if (toolTrace.length === 0) {
-    dashEvents.replaceChildren(element("li", "dash-event-empty", "No tool calls yet."));
-  } else {
-    dashEvents.replaceChildren(...[...toolTrace].reverse().map(dashEventRow));
-  }
-  if (dashEventCount !== null) {
-    dashEventCount.textContent = `${toolTrace.length} event${toolTrace.length === 1 ? "" : "s"}`;
-  }
-}
-
-function renderDashboard() {
-  if (!dashboardOpen) return;
-  const session = sessions.find((entry) => entry.id === currentSessionId);
-  const name =
-    session?.name &&
-    session.name.length > 0 &&
-    session.name !== session.id &&
-    !session.id.startsWith(session.name)
-      ? session.name
-      : "Session overview";
-  const shortId = currentSessionId.length > 0 ? currentSessionId.slice(0, 8) : "no session";
-  if (dashSessionName !== null) dashSessionName.textContent = name;
-  if (dashSessionId !== null) dashSessionId.textContent = shortId;
-  if (dashSessionTitle !== null) dashSessionTitle.textContent = name;
-  if (dashSub !== null) {
-    dashSub.textContent = `${toolTrace.length} tool call${toolTrace.length === 1 ? "" : "s"} · ${shortId}`;
-  }
-  if (dashProvider !== null) dashProvider.textContent = currentProvider.length > 0 ? currentProvider : "-";
-  if (dashModel !== null) dashModel.textContent = currentModel.length > 0 ? currentModel : "-";
-  if (dashInput !== null) dashInput.textContent = dashNumber(dashboardUsage?.inputTokens);
-  if (dashOutput !== null) dashOutput.textContent = dashNumber(dashboardUsage?.outputTokens);
-  if (dashCached !== null) dashCached.textContent = dashNumber(dashboardUsage?.cachedTokens);
-  if (dashId !== null) dashId.textContent = shortId;
-  if (dashMode !== null) dashMode.textContent = currentPermissionMode.length > 0 ? currentPermissionMode : "-";
-  updateDashStatus();
-  renderDashEvents();
-}
-
-function dashLaneY(index) {
-  return ((index + 0.5) * dashSize.height) / 6;
-}
-
-function dashX(item, now) {
-  return dashSize.width - ((now - item.perf) / 60_000) * dashSize.width;
-}
-
-function drawDash(now) {
-  if (dashCtx === null || dashSize.width === 0 || dashSize.height === 0) return;
-  const width = dashSize.width;
-  const height = dashSize.height;
-  const laneHeight = height / 6;
-  const compact = Math.min(1, laneHeight / 34);
-  const scale = 0.6 + 0.4 * compact;
-
-  dashCtx.clearRect(0, 0, width, height);
-
-  dashCtx.save();
-  dashCtx.strokeStyle = dashColors.border;
-  dashCtx.globalAlpha = 0.4;
-  dashCtx.lineWidth = 1;
-  for (let step = 1; step < 6; step += 1) {
-    const x = (step * width) / 6;
-    dashCtx.beginPath();
-    dashCtx.moveTo(x, 0);
-    dashCtx.lineTo(x, height);
-    dashCtx.stroke();
-  }
-  for (let lane = 1; lane < 6; lane += 1) {
-    const y = (lane * height) / 6;
-    dashCtx.beginPath();
-    dashCtx.moveTo(0, y);
-    dashCtx.lineTo(width, y);
-    dashCtx.stroke();
-  }
-  dashCtx.restore();
-
-  dashCtx.save();
-  dashCtx.globalCompositeOperation = "lighter";
-  for (let lane = 0; lane < 6; lane += 1) {
-    const key = ["context", "read", "search", "edit", "shell", "test"][lane];
-    const baseY = dashLaneY(lane);
-    for (let strand = 0; strand < 3; strand += 1) {
-      const amplitude = (3 + strand * 3 + (lane % 2) * 2) * scale;
-      const phase = now / (7_000 + strand * 1_900) + lane * 0.8 + strand * 2.1;
-      dashCtx.beginPath();
-      for (let x = 0; x <= width; x += 8) {
-        const y =
-          baseY +
-          Math.sin(x / 70 + phase) * amplitude +
-          Math.sin(x / 210 - phase * 0.8) * amplitude * 0.4;
-        if (x === 0) dashCtx.moveTo(x, y);
-        else dashCtx.lineTo(x, y);
-      }
-      dashCtx.strokeStyle = dashLaneColor(key);
-      dashCtx.globalAlpha = 0.1 + strand * 0.04;
-      dashCtx.lineWidth = 1 + strand * 0.2;
-      dashCtx.stroke();
-    }
-  }
-  dashCtx.restore();
-
-  const laneIndex = { context: 0, read: 1, search: 2, edit: 3, shell: 4, test: 5 };
-  const visible = toolTrace.filter((item) => now - item.perf <= 60_000 && item.perf <= now);
-
-  dashCtx.save();
-  for (let index = 1; index < visible.length; index += 1) {
-    const previous = visible[index - 1];
-    const current = visible[index];
-    if (previous === undefined || current === undefined) continue;
-    const x1 = dashX(previous, now);
-    const x2 = dashX(current, now);
-    const y1 = dashLaneY(laneIndex[previous.lane] ?? 4);
-    const y2 = dashLaneY(laneIndex[current.lane] ?? 4);
-    if (x1 < 0 || x2 < 0) continue;
-    const middle = (x1 + x2) / 2;
-    dashCtx.globalAlpha = 0.18;
-    dashCtx.strokeStyle = dashLaneColor(current.lane);
-    dashCtx.lineWidth = 1;
-    dashCtx.beginPath();
-    dashCtx.moveTo(x1, y1);
-    dashCtx.bezierCurveTo(middle, y1, middle, y2, x2, y2);
-    dashCtx.stroke();
-  }
-  dashCtx.restore();
-
-  dashCtx.save();
-  for (const item of visible) {
-    const x = dashX(item, now);
-    if (x < -8 || x > width + 8) continue;
-    const y = dashLaneY(laneIndex[item.lane] ?? 4);
-    const color = item.status === "error" ? dashColors.danger : dashLaneColor(item.lane);
-    const age = now - item.perf;
-    const recent = age < 1_500;
-    const endX = item.endPerf === null ? x : dashX({ perf: item.endPerf }, now);
-
-    dashCtx.globalAlpha = item.status === "running" ? 0.75 : 0.45;
-    dashCtx.strokeStyle = color;
-    dashCtx.lineWidth = 1.2;
-    dashCtx.beginPath();
-    dashCtx.moveTo(x, y);
-    dashCtx.lineTo(Math.max(x, endX), y);
-    dashCtx.stroke();
-
-    dashCtx.globalAlpha = 0.95;
-    dashCtx.fillStyle = color;
-    if (recent) {
-      dashCtx.shadowColor = color;
-      dashCtx.shadowBlur = 10;
-    }
-    dashCtx.beginPath();
-    dashCtx.arc(x, y, recent ? 2.8 : 1.9, 0, Math.PI * 2);
-    dashCtx.fill();
-    dashCtx.shadowBlur = 0;
-  }
-  dashCtx.restore();
-
-  dashCtx.save();
-  dashCtx.globalAlpha = 0.55;
-  dashCtx.strokeStyle = dashColors.cyan;
-  dashCtx.lineWidth = 1;
-  dashCtx.shadowColor = dashColors.cyan;
-  dashCtx.shadowBlur = 10;
-  dashCtx.beginPath();
-  dashCtx.moveTo(width - 1, 0);
-  dashCtx.lineTo(width - 1, height);
-  dashCtx.stroke();
-  dashCtx.restore();
-}
-
-function resizeDashCanvas() {
-  if (dashCanvas === null || dashCtx === null || !dashboardOpen) return;
-  const rect = dashCanvasWrap.getBoundingClientRect();
-  if (rect.width === 0 || rect.height === 0) return;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  dashSize = { width: rect.width, height: rect.height };
-  dashCanvas.width = Math.round(rect.width * dpr);
-  dashCanvas.height = Math.round(rect.height * dpr);
-  dashCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  drawDash(performance.now());
-}
-
-function stopDashLoop() {
-  if (dashRaf !== 0) window.cancelAnimationFrame(dashRaf);
-  dashRaf = 0;
-}
-
-function startDashLoop() {
-  stopDashLoop();
-  if (!dashboardOpen) return;
-  if (!dashMotionEnabled) {
-    drawDash(performance.now());
-    return;
-  }
-  const frame = (now) => {
-    if (!dashboardOpen) return;
-    drawDash(now);
-    dashRaf = window.requestAnimationFrame(frame);
-  };
-  dashRaf = window.requestAnimationFrame(frame);
-}
-
-function setDashboard(open) {
-  if (open === dashboardOpen) return;
-  if (open) {
-    dashboardOpen = true;
-    dashboard.hidden = false;
-    appEl.classList.add("dashboard-open");
-    dashChatBody.append(transcript, composerEl);
-    dashboardButton.textContent = "Chat";
-    renderDashboard();
-    resizeDashCanvas();
-    startDashLoop();
-    input.focus();
-  } else {
-    stopDashLoop();
-    dashboardOpen = false;
-    appEl.classList.remove("dashboard-open");
-    dashboard.hidden = true;
-    appEl.insertBefore(transcript, dashboard);
-    appEl.insertBefore(composerEl, dashboard);
-    dashboardButton.textContent = "Dashboard";
-    input.focus();
-  }
-  if (settingsModal !== null && !settingsModal.hidden) renderSettings();
-}
-
-function initDashboard() {
-  if (dashCanvas !== null) dashCtx = dashCanvas.getContext("2d");
-  if (typeof ResizeObserver === "function" && dashCanvasWrap !== null) {
-    new ResizeObserver(() => {
-      if (dashboardOpen) resizeDashCanvas();
-    }).observe(dashCanvasWrap);
-  }
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) stopDashLoop();
-    else if (dashboardOpen) startDashLoop();
-  });
 }
 
 const permissionHints = {
@@ -690,11 +261,6 @@ function renderSettings() {
   const mode = currentPermissionMode.length > 0 ? currentPermissionMode : "manual";
   settingsPermission.value = mode;
   settingsPermissionHint.textContent = permissionHint(mode);
-  settingsChat.classList.toggle("is-active", !dashboardOpen);
-  settingsDashboard.classList.toggle("is-active", dashboardOpen);
-  settingsChat.setAttribute("aria-pressed", String(!dashboardOpen));
-  settingsDashboard.setAttribute("aria-pressed", String(dashboardOpen));
-  settingsMotion.checked = dashMotionEnabled;
   settingsSession.textContent = currentSessionId.length > 0 ? currentSessionId.slice(0, 8) : "-";
   settingsState.textContent = statusEl.textContent || "-";
 }
@@ -711,13 +277,6 @@ function closeSettings() {
   hideSettingsError();
 }
 
-dashboardButton.addEventListener("click", () => setDashboard(!dashboardOpen));
-dashChat.addEventListener("click", () => setDashboard(false));
-dashSessions.addEventListener("click", () => sessionsButton.click());
-dashNew.addEventListener("click", () => newSessionButton.click());
-dashProviders.addEventListener("click", () => providersButton.click());
-dashArtifacts.addEventListener("click", () => $("artifacts-button").click());
-dashSettings.addEventListener("click", openSettings);
 settingsButton.addEventListener("click", openSettings);
 settingsClose.addEventListener("click", closeSettings);
 settingsModal.addEventListener("click", (event) => {
@@ -726,24 +285,6 @@ settingsModal.addEventListener("click", (event) => {
 settingsManageProviders.addEventListener("click", () => {
   closeSettings();
   providersButton.click();
-});
-settingsChat.addEventListener("click", () => {
-  closeSettings();
-  setDashboard(false);
-});
-settingsDashboard.addEventListener("click", () => {
-  closeSettings();
-  setDashboard(true);
-});
-settingsMotion.addEventListener("change", () => {
-  dashMotionEnabled = settingsMotion.checked;
-  if (dashboardOpen) {
-    if (dashMotionEnabled) startDashLoop();
-    else {
-      stopDashLoop();
-      drawDash(performance.now());
-    }
-  }
 });
 settingsPermission.addEventListener("change", () => {
   const mode = settingsPermission.value;
@@ -1004,42 +545,9 @@ function resetTranscript() {
   renderTimer = null;
   currentAssistant = null;
   tools.clear();
-  resetDashboardTrace();
   transcript.textContent = "";
   transcript.appendChild(empty);
   empty.hidden = false;
-}
-
-function recordHistoryToolCall(block, message) {
-  if (block === null || typeof block !== "object" || typeof block.id !== "string") return;
-  const at = typeof message.timestamp === "string" ? Date.parse(message.timestamp) : Date.now();
-  const stamp = Number.isFinite(at) ? at : Date.now();
-  const lane = dashLane(block.name, block.input);
-  toolTrace.push({
-    id: block.id,
-    name: String(block.name ?? "Tool"),
-    kind: lane.kind,
-    lane: lane.key,
-    title: dashTitle(block.name, block.input),
-    status: "running",
-    at: stamp,
-    startAt: stamp,
-    endAt: null,
-    perf: performance.now() - Math.max(0, Date.now() - stamp),
-    endPerf: null,
-  });
-  if (toolTrace.length > 80) toolTrace.shift();
-}
-
-function recordHistoryToolResult(block, message) {
-  if (block === null || typeof block !== "object") return;
-  const item = toolTrace.find((entry) => entry.id === block.toolCallId);
-  if (item === undefined) return;
-  const at = typeof message.timestamp === "string" ? Date.parse(message.timestamp) : Date.now();
-  const stamp = Number.isFinite(at) ? at : Date.now();
-  item.endAt = stamp;
-  item.endPerf = performance.now() - Math.max(0, Date.now() - stamp);
-  item.status = block.ok === true ? "ok" : "error";
 }
 
 function renderHistory(messages) {
@@ -1057,30 +565,17 @@ function renderHistory(messages) {
             ok: block.ok === true,
             text: textOf(block.content),
           });
-          recordHistoryToolResult(block, message);
         }
       }
     } else if (message.role === "assistant") {
       const text = textOf(message.content);
       if (text.trim().length > 0) addMessage("assistant", text, true);
-      if (message.usage !== null && typeof message.usage === "object") {
-        dashboardUsage = {
-          inputTokens: Number(message.usage.inputTokens) || 0,
-          outputTokens: Number(message.usage.outputTokens) || 0,
-          cachedTokens: Number(message.usage.cachedTokens) || 0,
-        };
-      }
       for (const block of message.content) {
         if (block?.type === "tool_call") {
           addToolRow(block);
-          recordHistoryToolCall(block, message);
         }
       }
     }
-  }
-  if (dashboardOpen) {
-    renderDashboard();
-    drawDash(performance.now());
   }
 }
 
@@ -1097,19 +592,9 @@ function handleEvent(event) {
       break;
     case "tool_start":
       addToolRow(event);
-      recordToolStart(event);
       break;
     case "tool_result":
       finishToolRow(event);
-      recordToolResult(event);
-      break;
-    case "usage":
-      dashboardUsage = {
-        inputTokens: Number(event.inputTokens) || 0,
-        outputTokens: Number(event.outputTokens) || 0,
-        cachedTokens: Number(event.cachedTokens) || 0,
-      };
-      if (dashboardOpen) renderDashboard();
       break;
     case "done":
       if (event.stopReason === "aborted") showError("Stopped.");
@@ -1957,8 +1442,6 @@ window.addEventListener("beforeunload", () => {
   intentionalClose = true;
   if (socket !== null) socket.close();
 });
-
-initDashboard();
 
 const hash = new URLSearchParams(location.hash.replace(/^#/, ""));
 token = hash.get("token") ?? "";
