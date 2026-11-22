@@ -741,6 +741,19 @@ export function registerExtraCommands(program: Command): void {
             setup.artifacts.create(EXAMPLE_ARTIFACT_NAME, EXAMPLE_ARTIFACT_HTML);
             return setup.artifacts.list();
           },
+          createArtifact: (name, html) => {
+            if (setup.artifacts === undefined) {
+              throw new KeycodeError("CONFIG_INVALID", "Artifacts are disabled.");
+            }
+            if (name.length > 120) {
+              throw new KeycodeError(
+                "CONFIG_INVALID",
+                "Artifact names are limited to 120 characters.",
+              );
+            }
+            const created = setup.artifacts.create(name, html);
+            return { artifacts: setup.artifacts.list(), id: created.id };
+          },
           deleteArtifact: (id) => {
             if (setup.artifacts === undefined) {
               throw new KeycodeError("CONFIG_INVALID", "Artifacts are disabled.");

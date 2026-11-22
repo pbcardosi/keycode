@@ -114,6 +114,15 @@ export interface RemoteHandler {
     | ((id: string, version?: number | undefined) => Promise<string | null> | string | null)
     | undefined;
   createExampleArtifact?: (() => Promise<RemoteArtifact[]> | RemoteArtifact[]) | undefined;
+  createArtifact?:
+    | ((
+        name: string,
+        html: string,
+      ) => Promise<{ artifacts: RemoteArtifact[]; id: string }> | {
+        artifacts: RemoteArtifact[];
+        id: string;
+      })
+    | undefined;
   deleteArtifact?: ((id: string) => Promise<RemoteArtifact[]> | RemoteArtifact[]) | undefined;
   providerStatuses?:
     | (() => Promise<RemoteProviderStatus[]> | RemoteProviderStatus[])
@@ -529,6 +538,7 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
         cancelled?: boolean;
         accept?: boolean;
         config?: unknown;
+        html?: string;
       };
       try {
         message = JSON.parse(text) as typeof message;
@@ -643,6 +653,41 @@ export async function startRemoteControl(options: RemoteServerOptions): Promise<
 
       if (message.type === "artifacts") {
         void sendArtifacts(connection);
+        return;
+      }
+
+      if (message.type === "artifact_create") {
+        if (options.handler.createArtifact === undefined) {
+          connection.send(JSON.stringify({ type: "error", message: "artifacts are not available" }));
+          return;
+        }
+        const name = typeof message.name === "string" ? message.name.trim() : "";
+        const html = typeof message.html === "string" ? message.html : "";
+        if (name.length === 0) {
+          connection.send(JSON.stringify({ type: "error", message: "Artifact name is required." }));
+          return;
+        }
+        if (html.trim().length === 0) {
+          connection.send(JSON.stringify({ type: "error", message: "Artifact HTML is required." }));
+          return;
+        }
+        void (async () => {
+          try {
+            const created = await options.handler.createArtifact?.(name, html);
+            broadcast({
+              type: "artifacts",
+              artifacts: created?.artifacts ?? (await artifacts()),
+              ...(created === undefined ? {} : { select: created.id }),
+            });
+          } catch (error) {
+            connection.send(
+              JSON.stringify({
+                type: "error",
+                message: (error as Error).message || "could not create the artifact",
+              }),
+            );
+          }
+        })();
         return;
       }
 

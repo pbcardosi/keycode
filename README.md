@@ -183,8 +183,8 @@ Open the printed URL. The interface supports:
 - multiple-choice `AskUserQuestion` dialogs with radio/checkbox options and free-form answers,
 - allow once / always / session / deny / cancel,
 - session list, new session, resume with history, rename, fork, and delete,
-- artifact panel with versioned HTML previews rendered inside the UI, plus an
-  addable example artifact and a delete action,
+- artifact panel with versioned HTML previews rendered inside the UI, an
+  Add artifact form, an automatic example artifact, and a delete action,
 - provider/model switching that keeps the current session,
 - provider manager for saving and removing API keys, with the key source and
   fingerprint shown; local providers work without a key,

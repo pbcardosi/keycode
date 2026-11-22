@@ -41,6 +41,11 @@ const artifactList = $("artifact-list");
 const artifactFrame = $("artifact-frame");
 const artifactPlaceholder = $("artifact-placeholder");
 const artifactsDelete = $("artifacts-delete");
+const artifactCreateModal = $("artifact-create-modal");
+const artifactCreateForm = $("artifact-create-form");
+const artifactCreateName = $("artifact-create-name");
+const artifactCreateHtml = $("artifact-create-html");
+const artifactCreateError = $("artifact-create-error");
 const sessionModal = $("session-modal");
 const sessionList = $("session-list");
 const sessionsButton = $("sessions-button");
@@ -467,7 +472,7 @@ function renderArtifactList() {
   artifactsDelete.disabled = !artifacts.some((artifact) => artifact.id === activeArtifactId);
   if (artifacts.length === 0) {
     artifactList.appendChild(
-      element("p", "hint", "No artifacts yet. Ask KeyCode to create one, or add the example."),
+      element("p", "hint", "No artifacts yet. Ask KeyCode to create one, or add one."),
     );
     return;
   }
@@ -486,6 +491,24 @@ function renderArtifactList() {
     item.addEventListener("click", () => selectArtifact(artifact.id));
     artifactList.appendChild(item);
   }
+}
+
+function showArtifactCreateError(message) {
+  artifactCreateError.textContent = message;
+  artifactCreateError.hidden = false;
+}
+
+function openArtifactCreate() {
+  artifactCreateModal.hidden = false;
+  artifactCreateError.hidden = true;
+  artifactCreateName.value = "";
+  artifactCreateHtml.value = "";
+  artifactCreateName.focus();
+}
+
+function closeArtifactCreate() {
+  artifactCreateModal.hidden = true;
+  artifactCreateError.hidden = true;
 }
 
 function openArtifacts() {
@@ -1075,6 +1098,14 @@ function handleMessage(message) {
       break;
     case "artifacts": {
       artifacts = Array.isArray(message.artifacts) ? message.artifacts : [];
+      if (
+        typeof message.select === "string" &&
+        artifacts.some((artifact) => artifact.id === message.select)
+      ) {
+        closeArtifactCreate();
+        selectArtifact(message.select);
+        break;
+      }
       if (message.example === true) {
         const newest = artifacts.reduce(
           (best, item) =>
@@ -1182,6 +1213,10 @@ function handleMessage(message) {
       endTurn();
       break;
     case "error":
+      if (!artifactCreateModal.hidden) {
+        showArtifactCreateError(message.message ?? "Could not create the artifact.");
+        break;
+      }
       if (!providerAddModal.hidden) {
         showProviderAddError(message.message ?? "Something went wrong.");
       }
@@ -1417,8 +1452,31 @@ $("artifacts-refresh").addEventListener("click", () => {
   send({ type: "artifacts" });
 });
 
-$("artifacts-example").addEventListener("click", () => {
-  send({ type: "artifact_example" });
+$("artifacts-add").addEventListener("click", openArtifactCreate);
+
+artifactCreateForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const name = artifactCreateName.value.trim();
+  const html = artifactCreateHtml.value;
+  if (name.length === 0) {
+    showArtifactCreateError("Enter a name.");
+    return;
+  }
+  if (html.trim().length === 0) {
+    showArtifactCreateError("Paste the artifact HTML.");
+    return;
+  }
+  if (socket === null || socket.readyState !== WebSocket.OPEN) {
+    showArtifactCreateError("Not connected to KeyCode.");
+    return;
+  }
+  artifactCreateError.hidden = true;
+  send({ type: "artifact_create", name, html });
+});
+
+$("artifact-create-cancel").addEventListener("click", closeArtifactCreate);
+artifactCreateModal.addEventListener("click", (event) => {
+  if (event.target === artifactCreateModal) closeArtifactCreate();
 });
 
 artifactsDelete.addEventListener("click", () => {

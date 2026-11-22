@@ -485,6 +485,17 @@ describe("T-I5: Remote Control", () => {
           });
           return [...stored];
         },
+        createArtifact: (name, html) => {
+          expect(html).toContain("<h1>");
+          const artifact = {
+            id: "artifact_3",
+            name,
+            latestVersion: 1,
+            createdAt: "2026-11-21T00:10:00.000Z",
+          };
+          stored.push(artifact);
+          return { artifacts: [...stored], id: artifact.id };
+        },
         deleteArtifact: (id) => {
           const index = stored.findIndex((item) => item.id === id);
           if (index === -1) throw new Error("Artifact not found");
@@ -524,6 +535,20 @@ describe("T-I5: Remote Control", () => {
     };
     expect(afterDelete.artifacts.map((artifact) => artifact.id)).not.toContain("artifact_2");
     expect(afterDelete.example).toBeUndefined();
+
+    client.send(
+      JSON.stringify({ type: "artifact_create", name: "custom", html: "<h1>hi</h1>" }),
+    );
+    const custom = (await nextOfType(client, "artifacts")) as {
+      artifacts: Array<{ id: string }>;
+      select?: string;
+    };
+    expect(custom.select).toBe("artifact_3");
+    expect(custom.artifacts.map((artifact) => artifact.id)).toContain("artifact_3");
+
+    client.send(JSON.stringify({ type: "artifact_create", name: "   ", html: "<p>x</p>" }));
+    const invalid = (await nextOfType(client, "error")) as { message: string };
+    expect(invalid.message).toBe("Artifact name is required.");
 
     client.close();
     await server.close();

@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#121212" />
     <title>KeyCode</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/styles.css?v=0.1.4-autoexample" />
+    <link rel="stylesheet" href="/styles.css?v=0.1.4-addartifact" />
   </head>
   <body>
     <div class="app">
@@ -331,7 +331,7 @@
         <div class="dialog-head">
           <h2 id="artifacts-title">Artifacts</h2>
           <div class="artifact-actions">
-            <button type="button" id="artifacts-example" class="ghost">Add example</button>
+            <button type="button" id="artifacts-add" class="ghost">Add artifact</button>
             <button type="button" id="artifacts-delete" class="ghost" disabled>Delete</button>
             <button type="button" id="artifacts-refresh" class="ghost">Refresh</button>
             <button type="button" id="artifacts-close" class="ghost">Close</button>
@@ -355,6 +355,30 @@
       </div>
     </div>
 
-    <script src="/app.js?v=0.1.4-autoexample" type="module"></script>
+    <div class="modal" id="artifact-create-modal" hidden>
+      <form class="dialog" id="artifact-create-form">
+        <h2>Add artifact</h2>
+        <label class="field">
+          <span>Name</span>
+          <input id="artifact-create-name" autocomplete="off" spellcheck="false" maxlength="120" />
+        </label>
+        <label class="field">
+          <span>HTML</span>
+          <textarea
+            id="artifact-create-html"
+            rows="10"
+            spellcheck="false"
+            placeholder="<!doctype html> ..."
+          ></textarea>
+        </label>
+        <p class="provider-error" id="artifact-create-error" role="alert" hidden></p>
+        <div class="choices">
+          <button type="button" id="artifact-create-cancel" class="ghost">Cancel</button>
+          <button type="submit">Create</button>
+        </div>
+      </form>
+    </div>
+
+    <script src="/app.js?v=0.1.4-addartifact" type="module"></script>
   </body>
 </html>
